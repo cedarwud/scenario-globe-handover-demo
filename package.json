@@ -1,0 +1,21 @@
+{
+  "name": "scenario-globe-handover-demo",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "test": "npm run build && node scripts/verify-phase0.mjs",
+    "test:phase1": "npm run build && node tests/smoke/bootstrap-loads-assets-and-workers.mjs",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "cesium": "1.140.0"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.2",
+    "vite": "^8.0.8",
+    "vite-plugin-static-copy": "^4.0.1"
+  }
+}

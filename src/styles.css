@@ -1,0 +1,258 @@
+:root {
+  color: #f4f5f7;
+  font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+  background:
+    radial-gradient(circle at top, rgba(70, 124, 171, 0.18), transparent 30%),
+    linear-gradient(180deg, #041018 0%, #061622 48%, #03070c 100%);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+}
+
+body {
+  overflow: hidden;
+}
+
+#app {
+  width: 100%;
+  height: 100%;
+}
+
+.app-shell {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #000;
+}
+
+.viewer-root {
+  width: 100%;
+  height: 100%;
+}
+
+.demo-panel {
+  position: absolute;
+  z-index: 8;
+  backdrop-filter: blur(18px);
+  background: linear-gradient(
+    180deg,
+    rgba(7, 20, 31, 0.84) 0%,
+    rgba(4, 11, 17, 0.78) 100%
+  );
+  border: 1px solid rgba(145, 198, 255, 0.16);
+  box-shadow:
+    0 22px 60px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.demo-kicker,
+.demo-panel-label,
+.demo-stat-label,
+.demo-summary-label {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(159, 196, 223, 0.72);
+}
+
+.demo-title,
+.demo-panel-title {
+  margin: 6px 0 0;
+  line-height: 1.1;
+}
+
+.demo-title {
+  font-size: clamp(1.2rem, 2vw, 1.8rem);
+  color: #f8fbff;
+}
+
+.demo-panel-title {
+  font-size: 1.05rem;
+  color: #f6f8fc;
+}
+
+.demo-panel {
+  width: min(360px, calc(100vw - 32px));
+  padding: 18px 20px 20px;
+  border-radius: 22px;
+}
+
+.demo-panel--left {
+  left: 20px;
+  bottom: 24px;
+}
+
+.demo-panel--right {
+  right: 20px;
+  top: 104px;
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease,
+    border-color 180ms ease;
+}
+
+.demo-panel--right[data-active="false"] {
+  opacity: 0.84;
+}
+
+.demo-panel-copy,
+.demo-panel-hint,
+.demo-summary-value,
+.demo-stat-value {
+  margin: 10px 0 0;
+  line-height: 1.45;
+  color: rgba(232, 238, 247, 0.84);
+}
+
+.demo-panel-hint {
+  color: rgba(184, 201, 219, 0.8);
+}
+
+.demo-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.demo-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(95, 157, 210, 0.14);
+  color: #d9ebfa;
+  font-size: 0.9rem;
+}
+
+.demo-progress {
+  margin-top: 14px;
+  overflow: hidden;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(86, 118, 150, 0.2);
+}
+
+.demo-progress-bar {
+  width: 100%;
+  height: 100%;
+  transform-origin: left center;
+  transform: scaleX(0);
+  background: linear-gradient(90deg, #4cc8ff 0%, #ffbf63 100%);
+}
+
+.demo-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.demo-stat-card {
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.demo-stat-card--serving {
+  background: linear-gradient(180deg, rgba(34, 111, 166, 0.24), rgba(9, 31, 49, 0.16));
+}
+
+.demo-stat-card--pending {
+  background: linear-gradient(180deg, rgba(173, 110, 27, 0.28), rgba(49, 31, 10, 0.16));
+}
+
+.demo-stat-title {
+  margin: 8px 0 0;
+  font-size: 1.15rem;
+  line-height: 1.1;
+}
+
+.demo-stat-value {
+  font-size: 0.92rem;
+}
+
+.demo-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.demo-summary-value {
+  margin-top: 6px;
+  font-weight: 600;
+}
+
+.viewer-lighting-toggle {
+  height: 32px;
+  width: 32px;
+  padding: 0;
+}
+
+.viewer-sky-toggle,
+.viewer-ntpu-shortcut {
+  height: 32px;
+  width: 32px;
+  padding: 0;
+}
+
+.viewer-lighting-toggle[data-lighting-enabled="true"] {
+  background: #3c5f86;
+  border-color: #aef;
+}
+
+.viewer-lighting-toggle-icon,
+.viewer-sky-toggle-icon,
+.viewer-ntpu-shortcut-icon {
+  display: block;
+  width: 30px;
+  height: 30px;
+  margin: 0 auto 2px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+@media (max-width: 980px) {
+  .demo-panel--right {
+    top: auto;
+    right: 20px;
+    bottom: 24px;
+  }
+
+  .demo-panel--left {
+    bottom: calc(24px + 280px);
+  }
+}
+
+@media (max-width: 720px) {
+  .demo-panel {
+    width: calc(100vw - 24px);
+    left: 12px;
+    right: 12px;
+  }
+
+  .demo-panel--left {
+    bottom: 308px;
+  }
+
+  .demo-panel--right {
+    bottom: 12px;
+  }
+}
