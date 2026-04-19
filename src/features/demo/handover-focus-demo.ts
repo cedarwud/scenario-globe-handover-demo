@@ -171,6 +171,16 @@ const STAGE_ARC_CYCLE_MS = STAGE_ARC_CYCLE_SEC * 1000;
 const STAGE_ARC_INITIAL_PHASE_FRACTIONS = [0.5, 5 / 6, 1 / 6] as const;
 const STAGE_ARC_PROXY_COUNT = STAGE_ARC_INITIAL_PHASE_FRACTIONS.length;
 
+// Synthetic beam-hopping cadence (§9). This is a within-serving time-share
+// cue, orthogonal to handover. It must stay clearly faster than
+// LOCAL_DEMO_CYCLE_DURATION_REAL_SEC so the two cues remain visually
+// distinguishable (§7.3 channel separation: BH rides opacity/glow only).
+const STAGE_BH_CYCLE_SEC = 1.5;
+const STAGE_BH_DWELL_FRACTION = 0.65;
+// Non-zero floor — the serving beam dims in guard but is never fully
+// invisible (§9.2).
+const STAGE_BH_GUARD_MULTIPLIER = 0.35;
+
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
@@ -818,15 +828,31 @@ function hideProxyElements(entities: StageEntities): void {
   }
 }
 
+// Synthetic beam-hopping modulation (§9.2). Returns 1.0 during dwell and
+// STAGE_BH_GUARD_MULTIPLIER during guard. The cadence is a presentation
+// cue only; it does not drive scheduler state or affect HO semantics.
+function computeBeamHopModulation(presentationElapsedSec: number): number {
+  const raw = presentationElapsedSec / STAGE_BH_CYCLE_SEC;
+  const bhPhase = ((raw % 1) + 1) % 1;
+  return bhPhase < STAGE_BH_DWELL_FRACTION ? 1.0 : STAGE_BH_GUARD_MULTIPLIER;
+}
+
+// BH multiplier rides the opacity/glow channel only (§7.3). Role color,
+// role label, link width, and cone geometry are never touched by BH —
+// those belong to the handover channel. Non-serving roles always pass
+// bhMultiplier = 1.0 (§9.2: pending/context are unaffected).
 function applyBeam(
   lineEntity: Entity,
   coneEntity: Entity,
   ueAnchor: UeAnchor,
   candidate: FocusCandidate,
-  role: FocusRole
+  role: FocusRole,
+  bhMultiplier: number
 ): void {
   const beam = buildBeamOrientation(candidate.proxyPositionM, ueAnchor.positionM);
   const color = colorForRole(role);
+  const baseGlowPower = role === "serving" ? 0.28 : role === "pending" ? 0.18 : 0.1;
+  const baseConeAlpha = role === "serving" ? 0.18 : role === "pending" ? 0.12 : 0.05;
 
   lineEntity.show = true;
   lineEntity.polyline!.positions = new ConstantProperty([
@@ -838,7 +864,7 @@ function applyBeam(
   );
   lineEntity.polyline!.material = new PolylineGlowMaterialProperty({
     color,
-    glowPower: role === "serving" ? 0.28 : role === "pending" ? 0.18 : 0.1,
+    glowPower: baseGlowPower * bhMultiplier,
     taperPower: 0.35
   });
 
@@ -853,7 +879,7 @@ function applyBeam(
     role === "serving" ? 4200 : role === "pending" ? 5200 : 2000
   );
   coneEntity.cylinder!.material = new ColorMaterialProperty(
-    color.withAlpha(role === "serving" ? 0.18 : role === "pending" ? 0.12 : 0.05)
+    color.withAlpha(baseConeAlpha * bhMultiplier)
   );
 }
 
@@ -1198,6 +1224,12 @@ export function createHandoverFocusDemoController({
       lastServingId = frame.serving.id;
     }
 
+    // BH modulation (§9) is computed once per tick and applied only to
+    // the serving role's beam (§9.2). Pending / context always pass 1.0.
+    const servingBhMultiplier = computeBeamHopModulation(
+      getPresentationElapsedSec(ueAnchor)
+    );
+
     // Proxy entities are bound to fixed arc slots — render iterates the
     // per-proxy ProxyFrame[] so role labels move between entities
     // without teleporting any proxy position (§6.5, §7.3).
@@ -1206,11 +1238,12 @@ export function createHandoverFocusDemoController({
       const beamLink = entities.beamLinks[i];
       const beamCone = entities.beamCones[i];
       const { candidate, role } = frame.proxyFrames[i];
+      const bhMultiplier = role === "serving" ? servingBhMultiplier : 1.0;
       if (proxyEntity) {
         applyProxy(proxyEntity, candidate, role);
       }
       if (beamLink && beamCone) {
-        applyBeam(beamLink, beamCone, ueAnchor, candidate, role);
+        applyBeam(beamLink, beamCone, ueAnchor, candidate, role, bhMultiplier);
       }
     }
 
