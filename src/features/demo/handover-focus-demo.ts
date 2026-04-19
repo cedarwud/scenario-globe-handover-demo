@@ -147,6 +147,14 @@ const STAGE_PROXY_SLOTS = {
   FocusRole,
   { forwardM: number; lateralM: number; upM: number }
 >;
+const STAGE_PROXY_MOTION_ENVELOPES = {
+  serving: { forwardM: 170, lateralM: 180, upM: 280 },
+  pending: { forwardM: 210, lateralM: 220, upM: 240 },
+  context: { forwardM: 240, lateralM: 260, upM: 320 }
+} as const satisfies Record<
+  FocusRole,
+  { forwardM: number; lateralM: number; upM: number }
+>;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -154,18 +162,25 @@ function clamp(value: number, min: number, max: number): number {
 
 function createStageProxyPosition(
   site: FocusSite,
+  candidate: FocusCandidate,
   role: FocusRole,
   stageHeadingRad: number
 ): Cartesian3 {
   const slot = STAGE_PROXY_SLOTS[role];
+  const envelope = STAGE_PROXY_MOTION_ENVELOPES[role];
+  const relativeAzimuthRad = CesiumMath.negativePiToPi(candidate.azimuthRad - stageHeadingRad);
+  const elevationNorm = clamp((candidate.elevationDeg + 8) / 88, 0, 1);
   const forwardEast = Math.sin(stageHeadingRad);
   const forwardNorth = Math.cos(stageHeadingRad);
   const rightEast = Math.cos(stageHeadingRad);
   const rightNorth = -Math.sin(stageHeadingRad);
-  const eastM = rightEast * slot.lateralM + forwardEast * slot.forwardM;
-  const northM = rightNorth * slot.lateralM + forwardNorth * slot.forwardM;
+  const forwardM = slot.forwardM + Math.cos(relativeAzimuthRad) * envelope.forwardM;
+  const lateralM = slot.lateralM + Math.sin(relativeAzimuthRad) * envelope.lateralM;
+  const upM = slot.upM + CesiumMath.lerp(-envelope.upM * 0.38, envelope.upM, elevationNorm);
+  const eastM = rightEast * lateralM + forwardEast * forwardM;
+  const northM = rightNorth * lateralM + forwardNorth * forwardM;
 
-  return createLocalOffsetPosition(site, eastM, northM, slot.upM);
+  return createLocalOffsetPosition(site, eastM, northM, upM);
 }
 
 function stageCandidate(
@@ -176,7 +191,7 @@ function stageCandidate(
 ): FocusCandidate {
   return {
     ...candidate,
-    proxyPositionM: createStageProxyPosition(site, role, stageHeadingRad)
+    proxyPositionM: createStageProxyPosition(site, candidate, role, stageHeadingRad)
   };
 }
 

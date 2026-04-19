@@ -94,6 +94,7 @@ The next slices should improve only the presentation layer:
    - proxy satellites
    - serving / pending beam cones
    - the selected site marker and local stage
+6. keep serving / pending / context proxies inside readable role slots, but allow constrained per-role motion so the overhead scene does not collapse into a static tableau
 
 ## 7. Landed Cleanup Slice
 
@@ -122,7 +123,8 @@ After the cleanup slice, later work should only explore lightweight presentation
 1. stronger local contrast and deemphasis of distant context
 2. clearer satellite/beam hierarchy in the upper half of the frame
 3. restrained styling changes for context geometry
-4. optional local-focus-only atmosphere, fog, or tint controls if they stay fast and reversible
+4. constrained local proxy motion envelopes that preserve stage readability while keeping the handover scene visibly alive
+5. optional local-focus-only atmosphere, fog, or tint controls if they stay fast and reversible
 
 If those steps still do not reach the target quality, the remaining gap should be treated as a data/asset limitation rather than hidden with fake local imagery.
 
