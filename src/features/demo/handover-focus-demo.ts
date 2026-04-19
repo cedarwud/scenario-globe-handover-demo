@@ -67,6 +67,22 @@ interface FocusCandidate {
   score: number;
 }
 
+// Per-proxy arc binding state. Each proxy holds a bound satellite id and
+// traverses a compressed stage-local arc (§6.2). The bound id only changes
+// at arc setting endpoints via identity rotation (§6.4).
+interface ProxyArcState {
+  arcEnteredAtPerformanceMs: number;
+  arcPlaneAzimuthRad: number;
+  boundCandidateId: string;
+}
+
+// One proxy's per-tick render input: which candidate is visually on this
+// arc slot and which role label it currently carries.
+interface ProxyFrame {
+  candidate: FocusCandidate;
+  role: FocusRole;
+}
+
 interface DemoFrame {
   context: FocusCandidate;
   detail: string;
@@ -74,6 +90,7 @@ interface DemoFrame {
   phaseLabel: string;
   phaseProgress: number;
   pending: FocusCandidate;
+  proxyFrames: readonly ProxyFrame[];
   recentEvent: string;
   serving: FocusCandidate;
   stageHeadingRad: number;
@@ -140,112 +157,47 @@ const ROLE_COLORS = {
   pending: Color.fromCssColorString("#ffb347"),
   context: Color.fromCssColorString("#dce7f2")
 } as const satisfies Record<FocusRole, Color>;
-const STAGE_PROXY_SLOTS = {
-  serving: { forwardM: 1_020, lateralM: 120, upM: 980 },
-  pending: { forwardM: 900, lateralM: -520, upM: 900 },
-  context: { forwardM: 1_260, lateralM: 620, upM: 1_180 }
-} as const satisfies Record<
-  FocusRole,
-  { forwardM: number; lateralM: number; upM: number }
->;
-const STAGE_PROXY_MOTION_ENVELOPES = {
-  serving: { forwardM: 240, lateralM: 240, upM: 340 },
-  pending: { forwardM: 320, lateralM: 320, upM: 280 },
-  context: { forwardM: 320, lateralM: 340, upM: 420 }
-} as const satisfies Record<
-  FocusRole,
-  { forwardM: number; lateralM: number; upM: number }
->;
-const STAGE_PROXY_PRESENTATION_DRIFT = {
-  serving: {
-    cycleSec: 6.6,
-    forwardM: 76,
-    lateralM: 118,
-    phaseOffsetRad: 0.3,
-    upM: 112
-  },
-  pending: {
-    cycleSec: 5.9,
-    forwardM: 126,
-    lateralM: 184,
-    phaseOffsetRad: 2.15,
-    upM: 96
-  },
-  context: {
-    cycleSec: 7.4,
-    forwardM: 92,
-    lateralM: 148,
-    phaseOffsetRad: 4.05,
-    upM: 156
-  }
-} as const satisfies Record<
-  FocusRole,
-  {
-    cycleSec: number;
-    forwardM: number;
-    lateralM: number;
-    phaseOffsetRad: number;
-    upM: number;
-  }
->;
+// Stage-local arc geometry (§6.2). These are readability compressions,
+// not orbit projections. The arc lives in the UE E/N/U frame.
+const STAGE_ARC_HORIZONTAL_RADIUS_M = 1_500;
+const STAGE_ARC_VERTICAL_RADIUS_M = 1_200;
+// One full rise → peak → set traversal, in real (wall-clock) seconds.
+// Deliberately longer than LOCAL_DEMO_CYCLE_DURATION_REAL_SEC so each
+// proxy spans multiple handover cycles per arc.
+const STAGE_ARC_CYCLE_SEC = 24;
+const STAGE_ARC_CYCLE_MS = STAGE_ARC_CYCLE_SEC * 1000;
+// Initial arc phases per proxy so the first visible frame already shows
+// one proxy near peak, one rising, one setting (§6.3).
+const STAGE_ARC_INITIAL_PHASE_FRACTIONS = [0.5, 5 / 6, 1 / 6] as const;
+const STAGE_ARC_PROXY_COUNT = STAGE_ARC_INITIAL_PHASE_FRACTIONS.length;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-function createStageProxyPosition(
-  ueAnchor: UeAnchor,
-  candidate: FocusCandidate,
-  role: FocusRole,
-  stageHeadingRad: number,
-  presentationElapsedSec: number
-): Cartesian3 {
-  const slot = STAGE_PROXY_SLOTS[role];
-  const envelope = STAGE_PROXY_MOTION_ENVELOPES[role];
-  const drift = STAGE_PROXY_PRESENTATION_DRIFT[role];
-  const relativeAzimuthRad = CesiumMath.negativePiToPi(candidate.azimuthRad - stageHeadingRad);
-  const elevationNorm = clamp((candidate.elevationDeg + 8) / 88, 0, 1);
-  const driftPhaseRad =
-    ((presentationElapsedSec / drift.cycleSec) * Math.PI * 2) + drift.phaseOffsetRad;
-  const forwardEast = Math.sin(stageHeadingRad);
-  const forwardNorth = Math.cos(stageHeadingRad);
-  const rightEast = Math.cos(stageHeadingRad);
-  const rightNorth = -Math.sin(stageHeadingRad);
-  const forwardM =
-    slot.forwardM +
-    Math.cos(relativeAzimuthRad) * envelope.forwardM +
-    Math.sin(driftPhaseRad) * drift.forwardM;
-  const lateralM =
-    slot.lateralM +
-    Math.sin(relativeAzimuthRad) * envelope.lateralM +
-    Math.cos(driftPhaseRad) * drift.lateralM;
-  const upM =
-    slot.upM +
-    CesiumMath.lerp(-envelope.upM * 0.38, envelope.upM, elevationNorm) +
-    Math.sin(driftPhaseRad * 1.16 + 0.48) * drift.upM;
-  const eastM = rightEast * lateralM + forwardEast * forwardM;
-  const northM = rightNorth * lateralM + forwardNorth * forwardM;
-
-  return createLocalOffsetPosition(ueAnchor, eastM, northM, upM);
+function computeArcPhase(arc: ProxyArcState, nowMs: number): number {
+  const elapsedMs = nowMs - arc.arcEnteredAtPerformanceMs;
+  const raw = elapsedMs / STAGE_ARC_CYCLE_MS;
+  return ((raw % 1) + 1) % 1;
 }
 
-function stageCandidate(
+// Stage-local arc position (§6.2). Phase 0 → rising foot on +forward,
+// phase 0.5 → peak near zenith, phase 1 (wraps to 0) → setting foot on
+// −forward. The arc plane azimuth is locked at arc entry (§6.4) so the
+// proxy follows a stable track until identity rotation.
+function createStageArcPosition(
   ueAnchor: UeAnchor,
-  candidate: FocusCandidate,
-  role: FocusRole,
-  stageHeadingRad: number,
-  presentationElapsedSec: number
-): FocusCandidate {
-  return {
-    ...candidate,
-    proxyPositionM: createStageProxyPosition(
-      ueAnchor,
-      candidate,
-      role,
-      stageHeadingRad,
-      presentationElapsedSec
-    )
-  };
+  arc: ProxyArcState,
+  nowMs: number
+): Cartesian3 {
+  const arcPhase = computeArcPhase(arc, nowMs);
+  const theta = arcPhase * Math.PI;
+  const forwardOffsetM = Math.cos(theta) * STAGE_ARC_HORIZONTAL_RADIUS_M;
+  const upOffsetM = Math.sin(theta) * STAGE_ARC_VERTICAL_RADIUS_M;
+  const eastM = Math.sin(arc.arcPlaneAzimuthRad) * forwardOffsetM;
+  const northM = Math.cos(arc.arcPlaneAzimuthRad) * forwardOffsetM;
+
+  return createLocalOffsetPosition(ueAnchor, eastM, northM, upOffsetM);
 }
 
 function setPanelActive(shell: AppShellMount, active: boolean): void {
@@ -424,22 +376,125 @@ function evaluateCandidate(ueAnchor: UeAnchor, sample: ConstellationSatelliteSam
   };
 }
 
-function buildDemoFrame(
+function rankCandidatesByScore(
   ueAnchor: UeAnchor,
   samples: ReadonlyArray<ConstellationSatelliteSample>
-): DemoFrame {
-  const rankedCandidates = samples
+): FocusCandidate[] {
+  return samples
     .map((sample) => evaluateCandidate(ueAnchor, sample))
-    .sort((left, right) => right.score - left.score)
-    .slice(0, 3);
+    .sort((left, right) => right.score - left.score);
+}
+
+function pickRotationCandidate(
+  rankedCandidates: ReadonlyArray<FocusCandidate>,
+  excludedIds: ReadonlySet<string>
+): FocusCandidate | null {
+  for (const candidate of rankedCandidates) {
+    if (!excludedIds.has(candidate.id)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+// Seed per-proxy arcs at UE placement (§6.1, §6.3). Initial phase
+// fractions give an instant "one at peak, one rising, one setting"
+// silhouette even before the first tick.
+function initializeProxyArcs(
+  ueAnchor: UeAnchor,
+  samples: ReadonlyArray<ConstellationSatelliteSample>,
+  nowMs: number
+): ProxyArcState[] {
+  const ranked = rankCandidatesByScore(ueAnchor, samples);
+  const arcs: ProxyArcState[] = [];
+  const seenIds = new Set<string>();
+
+  for (let i = 0; i < STAGE_ARC_PROXY_COUNT; i += 1) {
+    const phaseFraction = STAGE_ARC_INITIAL_PHASE_FRACTIONS[i] ?? 0;
+    const candidate = pickRotationCandidate(ranked, seenIds) ?? ranked[0];
+    if (!candidate) {
+      break;
+    }
+    seenIds.add(candidate.id);
+    arcs.push({
+      arcEnteredAtPerformanceMs: nowMs - phaseFraction * STAGE_ARC_CYCLE_MS,
+      arcPlaneAzimuthRad: candidate.azimuthRad,
+      boundCandidateId: candidate.id
+    });
+  }
+
+  return arcs;
+}
+
+// Identity rotation hook (§6.4). When an arc reaches its setting
+// endpoint, rebind to the next ranked candidate not currently bound on
+// another proxy and advance arcEnteredAtPerformanceMs by exactly one
+// cycle so the phase stagger (§6.3) is preserved across rotations.
+// This never modifies the HO counter — §8.3's counting rule is driven
+// by serving-id changes in buildDemoFrame output, not by this hook.
+function advanceProxyArcs(
+  arcs: ProxyArcState[],
+  ueAnchor: UeAnchor,
+  samples: ReadonlyArray<ConstellationSatelliteSample>,
+  nowMs: number
+): void {
+  for (let i = 0; i < arcs.length; i += 1) {
+    const arc = arcs[i];
+    while (nowMs - arc.arcEnteredAtPerformanceMs >= STAGE_ARC_CYCLE_MS) {
+      const otherIds = new Set<string>();
+      for (let j = 0; j < arcs.length; j += 1) {
+        if (j !== i) {
+          otherIds.add(arcs[j].boundCandidateId);
+        }
+      }
+      const ranked = rankCandidatesByScore(ueAnchor, samples);
+      const rotated = pickRotationCandidate(ranked, otherIds) ?? ranked[0];
+      if (rotated) {
+        arc.boundCandidateId = rotated.id;
+        arc.arcPlaneAzimuthRad = rotated.azimuthRad;
+      }
+      arc.arcEnteredAtPerformanceMs += STAGE_ARC_CYCLE_MS;
+    }
+  }
+}
+
+function buildDemoFrame(
+  ueAnchor: UeAnchor,
+  samples: ReadonlyArray<ConstellationSatelliteSample>,
+  arcs: ReadonlyArray<ProxyArcState>,
+  nowMs: number
+): DemoFrame {
+  // Per-proxy FocusCandidate with arc-derived proxyPositionM (§6.2).
+  // The slot-based proxyPositionM produced by evaluateCandidate is
+  // intentionally overwritten here — under P2 the proxy position comes
+  // from the arc only, never from the role.
+  const proxyCandidates: FocusCandidate[] = [];
+  for (const arc of arcs) {
+    const sample = samples.find((entry) => entry.id === arc.boundCandidateId);
+    if (!sample) {
+      continue;
+    }
+    const candidate = evaluateCandidate(ueAnchor, sample);
+    proxyCandidates.push({
+      ...candidate,
+      proxyPositionM: createStageArcPosition(ueAnchor, arc, nowMs)
+    });
+  }
 
   const safeCandidates =
-    rankedCandidates.length >= 3
-      ? rankedCandidates
+    proxyCandidates.length >= STAGE_ARC_PROXY_COUNT
+      ? proxyCandidates
       : [
-          ...rankedCandidates,
-          ...rankedCandidates.slice(0, Math.max(0, 3 - rankedCandidates.length))
+          ...proxyCandidates,
+          ...proxyCandidates.slice(
+            0,
+            Math.max(0, STAGE_ARC_PROXY_COUNT - proxyCandidates.length)
+          )
         ];
+
+  const rankedByScore = [...safeCandidates].sort(
+    (left, right) => right.score - left.score
+  );
   const presentationElapsedSec = getPresentationElapsedSec(ueAnchor);
   const phaseProgress =
     (((presentationElapsedSec % LOCAL_DEMO_CYCLE_DURATION_REAL_SEC) +
@@ -448,114 +503,72 @@ function buildDemoFrame(
     LOCAL_DEMO_CYCLE_DURATION_REAL_SEC;
   const baseIndex =
     Math.floor(presentationElapsedSec / LOCAL_DEMO_CYCLE_DURATION_REAL_SEC) %
-    safeCandidates.length;
-  const servingCandidate =
-    safeCandidates[(baseIndex + safeCandidates.length) % safeCandidates.length];
-  const pendingCandidate = safeCandidates[(baseIndex + 1) % safeCandidates.length];
-  const contextCandidate = safeCandidates[(baseIndex + 2) % safeCandidates.length];
-  const stageHeadingRad = DISPLAY_STAGE_HEADING_RAD;
-  const stagedServingCandidate = stageCandidate(
-    ueAnchor,
-    servingCandidate,
-    "serving",
-    stageHeadingRad,
-    presentationElapsedSec
-  );
-  const stagedPendingCandidate = stageCandidate(
-    ueAnchor,
-    pendingCandidate,
-    "pending",
-    stageHeadingRad,
-    presentationElapsedSec
-  );
-  const stagedContextCandidate = stageCandidate(
-    ueAnchor,
-    contextCandidate,
-    "context",
-    stageHeadingRad,
-    presentationElapsedSec
-  );
+    rankedByScore.length;
+  const baselineServing =
+    rankedByScore[(baseIndex + rankedByScore.length) % rankedByScore.length];
+  const baselinePending = rankedByScore[(baseIndex + 1) % rankedByScore.length];
+  const baselineContext = rankedByScore[(baseIndex + 2) % rankedByScore.length];
+
+  // Switching / post identity swap (§8.3 — HO contract unchanged). Only
+  // the role LABEL moves between proxies; proxy arc positions do not
+  // teleport (§6.5).
+  const swapped = phaseProgress >= 0.72;
+  const displayedServing = swapped ? baselinePending : baselineServing;
+  const displayedPending = swapped ? baselineServing : baselinePending;
+  const displayedContext = baselineContext;
+
+  const proxyFrames: ProxyFrame[] = safeCandidates.map((candidate) => ({
+    candidate,
+    role:
+      candidate.id === displayedServing.id
+        ? "serving"
+        : candidate.id === displayedPending.id
+          ? "pending"
+          : "context"
+  }));
+
+  let detail: string;
+  let phase: DemoPhase;
+  let phaseLabel: string;
+  let recentEvent: string;
 
   if (phaseProgress < 0.42) {
-    return {
-      context: stagedContextCandidate,
-      detail:
-        "The UE anchor stays locked while the global orbit layer keeps moving. The local stage compresses the geometry so the handover narrative stays readable at city scale.",
-      phase: "tracking",
-      phaseLabel: "Tracking Stable Beam",
-      phaseProgress,
-      pending: stagedPendingCandidate,
-      recentEvent: "Monitoring candidate offset",
-      serving: stagedServingCandidate,
-      stageHeadingRad
-    };
-  }
-
-  if (phaseProgress < 0.72) {
-    return {
-      context: stagedContextCandidate,
-      detail:
-        "The pending satellite is promoted on the local stage before the visual switch. This is a demo cue, not a real handover decision path.",
-      phase: "prepared",
-      phaseLabel: "Prepared Target Window",
-      phaseProgress,
-      pending: stagedPendingCandidate,
-      recentEvent: `${servingCandidate.id} preparing ${pendingCandidate.id}`,
-      serving: stagedServingCandidate,
-      stageHeadingRad
-    };
-  }
-
-  if (phaseProgress < 0.88) {
-    return {
-      context: stagedContextCandidate,
-      detail:
-        "The serving role flips on the local stage proxies while the global satellites keep their original orbit motion. This is the core dual-scale demo behavior.",
-      phase: "switching",
-      phaseLabel: "Synthetic Handover Switch",
-      phaseProgress,
-      pending: stageCandidate(
-        ueAnchor,
-        servingCandidate,
-        "pending",
-        stageHeadingRad,
-        presentationElapsedSec
-      ),
-      recentEvent: `${servingCandidate.id} → ${pendingCandidate.id}`,
-      serving: stageCandidate(
-        ueAnchor,
-        pendingCandidate,
-        "serving",
-        stageHeadingRad,
-        presentationElapsedSec
-      ),
-      stageHeadingRad
-    };
+    detail =
+      "The UE anchor stays locked while the global orbit layer keeps moving. The local stage compresses the geometry so the handover narrative stays readable at city scale.";
+    phase = "tracking";
+    phaseLabel = "Tracking Stable Beam";
+    recentEvent = "Monitoring candidate offset";
+  } else if (phaseProgress < 0.72) {
+    detail =
+      "The pending satellite is promoted on the local stage before the visual switch. This is a demo cue, not a real handover decision path.";
+    phase = "prepared";
+    phaseLabel = "Prepared Target Window";
+    recentEvent = `${baselineServing.id} preparing ${baselinePending.id}`;
+  } else if (phaseProgress < 0.88) {
+    detail =
+      "The serving role flips on the local stage proxies while the global satellites keep their original orbit motion. This is the core dual-scale demo behavior.";
+    phase = "switching";
+    phaseLabel = "Synthetic Handover Switch";
+    recentEvent = `${baselineServing.id} → ${baselinePending.id}`;
+  } else {
+    detail =
+      "Post-switch settling keeps the previous satellite on the stage briefly so you can read the transition without losing context.";
+    phase = "post";
+    phaseLabel = "Post-Handover Settle";
+    recentEvent = `${baselineServing.id} released UE anchor focus`;
   }
 
   return {
-    context: stagedContextCandidate,
-    detail:
-      "Post-switch settling keeps the previous satellite on the stage briefly so you can read the transition without losing context.",
-    phase: "post",
-    phaseLabel: "Post-Handover Settle",
+    context: displayedContext,
+    detail,
+    phase,
+    phaseLabel,
     phaseProgress,
-    pending: stageCandidate(
-      ueAnchor,
-      servingCandidate,
-      "pending",
-      stageHeadingRad,
-      presentationElapsedSec
-    ),
-    recentEvent: `${servingCandidate.id} released UE anchor focus`,
-    serving: stageCandidate(
-      ueAnchor,
-      pendingCandidate,
-      "serving",
-      stageHeadingRad,
-      presentationElapsedSec
-    ),
-    stageHeadingRad
+    pending: displayedPending,
+    proxyFrames,
+    recentEvent,
+    serving: displayedServing,
+    stageHeadingRad: DISPLAY_STAGE_HEADING_RAD
   };
 }
 
@@ -1147,6 +1160,7 @@ export function createHandoverFocusDemoController({
   );
   let disposed = false;
   let ueAnchor: UeAnchor | null = null;
+  let proxyArcs: ProxyArcState[] = [];
   let lastServingId: string | null = null;
   let handoverCount = 0;
   let cancelActiveGlide: (() => void) | null = null;
@@ -1165,8 +1179,18 @@ export function createHandoverFocusDemoController({
     }
 
     const samples = constellation.sampleAtTime(time);
-    const frame = buildDemoFrame(ueAnchor, samples);
+    const nowMs = performance.now();
 
+    // Identity rotation hook (§6.4) — runs before the frame so any
+    // arc-setting wrap is already reflected in boundCandidateId when
+    // buildDemoFrame reads it.
+    advanceProxyArcs(proxyArcs, ueAnchor, samples, nowMs);
+
+    const frame = buildDemoFrame(ueAnchor, samples, proxyArcs, nowMs);
+
+    // HO counter rule (§8.3) — unchanged. Serving id changes from either
+    // ranking-driven role swap or serving-proxy identity rotation both
+    // increment the counter exactly once.
     if (frame.serving.id !== lastServingId) {
       if (lastServingId !== null) {
         handoverCount += 1;
@@ -1174,12 +1198,22 @@ export function createHandoverFocusDemoController({
       lastServingId = frame.serving.id;
     }
 
-    applyProxy(entities.proxySatellites[0], frame.serving, "serving");
-    applyProxy(entities.proxySatellites[1], frame.pending, "pending");
-    applyProxy(entities.proxySatellites[2], frame.context, "context");
-    applyBeam(entities.beamLinks[0], entities.beamCones[0], ueAnchor, frame.serving, "serving");
-    applyBeam(entities.beamLinks[1], entities.beamCones[1], ueAnchor, frame.pending, "pending");
-    applyBeam(entities.beamLinks[2], entities.beamCones[2], ueAnchor, frame.context, "context");
+    // Proxy entities are bound to fixed arc slots — render iterates the
+    // per-proxy ProxyFrame[] so role labels move between entities
+    // without teleporting any proxy position (§6.5, §7.3).
+    for (let i = 0; i < frame.proxyFrames.length; i += 1) {
+      const proxyEntity = entities.proxySatellites[i];
+      const beamLink = entities.beamLinks[i];
+      const beamCone = entities.beamCones[i];
+      const { candidate, role } = frame.proxyFrames[i];
+      if (proxyEntity) {
+        applyProxy(proxyEntity, candidate, role);
+      }
+      if (beamLink && beamCone) {
+        applyBeam(beamLink, beamCone, ueAnchor, candidate, role);
+      }
+    }
+
     syncUi(shell, ueAnchor, {
       ...frame,
       recentEvent:
@@ -1191,9 +1225,14 @@ export function createHandoverFocusDemoController({
     onSelectUeAnchor?.();
     ueAnchor = toUeAnchor(positionM, viewer.clock.currentTime, options?.displayName);
     const previewTime = viewer.clock.currentTime;
+    const previewSamples = constellation.sampleAtTime(previewTime);
+    const previewNowMs = performance.now();
+    proxyArcs = initializeProxyArcs(ueAnchor, previewSamples, previewNowMs);
     const previewFrame = buildDemoFrame(
       ueAnchor,
-      constellation.sampleAtTime(previewTime)
+      previewSamples,
+      proxyArcs,
+      previewNowMs
     );
     lastServingId = null;
     handoverCount = 0;
@@ -1230,6 +1269,7 @@ export function createHandoverFocusDemoController({
   return {
     clearUeAnchor(options?: ClearUeAnchorOptions): void {
       ueAnchor = null;
+      proxyArcs = [];
       lastServingId = null;
       handoverCount = 0;
       cancelActiveGlide?.();
