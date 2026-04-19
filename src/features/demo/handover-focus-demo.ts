@@ -33,7 +33,7 @@ import type {
 type FocusRole = "serving" | "pending" | "context";
 type DemoPhase = "tracking" | "prepared" | "switching" | "post";
 
-interface FocusSite {
+interface UeAnchor {
   displayName?: string;
   latitudeDeg: number;
   longitudeDeg: number;
@@ -43,12 +43,12 @@ interface FocusSite {
   surfaceHeightM: number;
 }
 
-interface FocusSiteSelectionOptions {
+interface UeAnchorSelectionOptions {
   displayName?: string;
   transition?: "fly" | "glide";
 }
 
-interface ClearSiteFocusOptions {
+interface ClearUeAnchorOptions {
   cancelFlight?: boolean;
 }
 
@@ -194,7 +194,7 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 function createStageProxyPosition(
-  site: FocusSite,
+  ueAnchor: UeAnchor,
   candidate: FocusCandidate,
   role: FocusRole,
   stageHeadingRad: number,
@@ -226,11 +226,11 @@ function createStageProxyPosition(
   const eastM = rightEast * lateralM + forwardEast * forwardM;
   const northM = rightNorth * lateralM + forwardNorth * forwardM;
 
-  return createLocalOffsetPosition(site, eastM, northM, upM);
+  return createLocalOffsetPosition(ueAnchor, eastM, northM, upM);
 }
 
 function stageCandidate(
-  site: FocusSite,
+  ueAnchor: UeAnchor,
   candidate: FocusCandidate,
   role: FocusRole,
   stageHeadingRad: number,
@@ -239,7 +239,7 @@ function stageCandidate(
   return {
     ...candidate,
     proxyPositionM: createStageProxyPosition(
-      site,
+      ueAnchor,
       candidate,
       role,
       stageHeadingRad,
@@ -253,12 +253,12 @@ function setPanelActive(shell: AppShellMount, active: boolean): void {
 }
 
 function setNoSelectionState(shell: AppShellMount, satelliteCount: number): void {
-  shell.siteState.textContent = "Double-click the globe to stage a local handover scene";
-  shell.siteCoordinates.textContent = "No site selected.";
+  shell.ueAnchorState.textContent = "Double-click the globe to place a UE anchor";
+  shell.ueAnchorCoordinates.textContent = "No UE anchor placed.";
   shell.globalSatelliteCount.textContent = String(satelliteCount);
   shell.globalHint.textContent =
     "The orbit layer stays global. Double-click any point on the Earth to create a local stage with enlarged proxy satellites and a synthetic handover loop.";
-  shell.handoverPhase.textContent = "Waiting for site selection";
+  shell.handoverPhase.textContent = "Waiting for UE anchor";
   shell.handoverProgressBar.style.transform = "scaleX(0)";
   shell.servingSatellite.textContent = "—";
   shell.servingMetric.textContent = "—";
@@ -267,26 +267,26 @@ function setNoSelectionState(shell: AppShellMount, satelliteCount: number): void
   shell.contextSatellite.textContent = "—";
   shell.recentEvent.textContent = "—";
   shell.detail.textContent =
-    "No local focus is active. Double-click a site to see the same-page handover presentation.";
+    "No local focus is active. Double-click the globe to place a UE anchor and see the same-page handover presentation.";
   setPanelActive(shell, false);
 }
 
-function formatCoordinates(site: FocusSite): string {
-  return `${site.latitudeDeg.toFixed(4)}°, ${site.longitudeDeg.toFixed(
+function formatCoordinates(ueAnchor: UeAnchor): string {
+  return `${ueAnchor.latitudeDeg.toFixed(4)}°, ${ueAnchor.longitudeDeg.toFixed(
     4
-  )}° • ${site.surfaceHeightM.toFixed(0)} m`;
+  )}° • ${ueAnchor.surfaceHeightM.toFixed(0)} m`;
 }
 
-function formatSiteHeading(site: FocusSite): string {
-  return site.displayName
-    ? `Site focus active at ${site.displayName}`
-    : `Site focus active at ${site.latitudeDeg.toFixed(2)}°, ${site.longitudeDeg.toFixed(2)}°`;
+function formatUeAnchorHeading(ueAnchor: UeAnchor): string {
+  return ueAnchor.displayName
+    ? `UE anchored at ${ueAnchor.displayName}`
+    : `UE anchored at ${ueAnchor.latitudeDeg.toFixed(2)}°, ${ueAnchor.longitudeDeg.toFixed(2)}°`;
 }
 
-function formatSiteMarkerLabel(site: FocusSite): string {
-  return site.displayName
-    ? site.displayName
-    : `Site Focus • ${site.latitudeDeg.toFixed(2)}°, ${site.longitudeDeg.toFixed(2)}°`;
+function formatUeAnchorMarkerLabel(ueAnchor: UeAnchor): string {
+  return ueAnchor.displayName
+    ? ueAnchor.displayName
+    : `UE anchor • ${ueAnchor.latitudeDeg.toFixed(2)}°, ${ueAnchor.longitudeDeg.toFixed(2)}°`;
 }
 
 function colorForRole(role: FocusRole): Color {
@@ -330,11 +330,11 @@ function pickEarthPosition(viewer: Viewer, screenPosition: Cartesian2) {
   );
 }
 
-function toFocusSite(
+function toUeAnchor(
   positionM: Cartesian3,
   time: JulianDate,
   displayName?: string
-): FocusSite {
+): UeAnchor {
   const cartographic = Cartographic.fromCartesian(positionM);
   const stagedSurfaceHeightM = Math.max(cartographic.height, 0);
   const stagedPositionM = Cartesian3.fromRadians(
@@ -354,23 +354,23 @@ function toFocusSite(
   };
 }
 
-function createLocalFrame(site: FocusSite): Matrix4 {
-  return Transforms.eastNorthUpToFixedFrame(site.positionM);
+function createLocalFrame(ueAnchor: UeAnchor): Matrix4 {
+  return Transforms.eastNorthUpToFixedFrame(ueAnchor.positionM);
 }
 
-function getPresentationElapsedSec(site: FocusSite): number {
+function getPresentationElapsedSec(ueAnchor: UeAnchor): number {
   // Keep the local focus motion readable for demo narration even while the
   // shared globe clock runs faster to show orbital context.
-  return Math.max((performance.now() - site.selectedAtPerformanceMs) / 1000, 0);
+  return Math.max((performance.now() - ueAnchor.selectedAtPerformanceMs) / 1000, 0);
 }
 
 function createLocalOffsetPosition(
-  site: FocusSite,
+  ueAnchor: UeAnchor,
   eastM: number,
   northM: number,
   upM: number
 ): Cartesian3 {
-  const localFrame = createLocalFrame(site);
+  const localFrame = createLocalFrame(ueAnchor);
   return Matrix4.multiplyByPoint(
     localFrame,
     new Cartesian3(eastM, northM, upM),
@@ -378,8 +378,8 @@ function createLocalOffsetPosition(
   );
 }
 
-function evaluateCandidate(site: FocusSite, sample: ConstellationSatelliteSample): FocusCandidate {
-  const localFrame = createLocalFrame(site);
+function evaluateCandidate(ueAnchor: UeAnchor, sample: ConstellationSatelliteSample): FocusCandidate {
+  const localFrame = createLocalFrame(ueAnchor);
   const inverseFrame = Matrix4.inverseTransformation(localFrame, new Matrix4());
   const localPoint = Matrix4.multiplyByPoint(
     inverseFrame,
@@ -402,7 +402,7 @@ function evaluateCandidate(site: FocusSite, sample: ConstellationSatelliteSample
   const proxyHeightM =
     PROXY_HEIGHT_MIN_M + elevationNorm * (PROXY_HEIGHT_MAX_M - PROXY_HEIGHT_MIN_M);
   const proxyPositionM = createLocalOffsetPosition(
-    site,
+    ueAnchor,
     Math.sin(azimuthRad) * proxyRadiusM,
     Math.cos(azimuthRad) * proxyRadiusM,
     proxyHeightM
@@ -425,11 +425,11 @@ function evaluateCandidate(site: FocusSite, sample: ConstellationSatelliteSample
 }
 
 function buildDemoFrame(
-  site: FocusSite,
+  ueAnchor: UeAnchor,
   samples: ReadonlyArray<ConstellationSatelliteSample>
 ): DemoFrame {
   const rankedCandidates = samples
-    .map((sample) => evaluateCandidate(site, sample))
+    .map((sample) => evaluateCandidate(ueAnchor, sample))
     .sort((left, right) => right.score - left.score)
     .slice(0, 3);
 
@@ -440,7 +440,7 @@ function buildDemoFrame(
           ...rankedCandidates,
           ...rankedCandidates.slice(0, Math.max(0, 3 - rankedCandidates.length))
         ];
-  const presentationElapsedSec = getPresentationElapsedSec(site);
+  const presentationElapsedSec = getPresentationElapsedSec(ueAnchor);
   const phaseProgress =
     (((presentationElapsedSec % LOCAL_DEMO_CYCLE_DURATION_REAL_SEC) +
       LOCAL_DEMO_CYCLE_DURATION_REAL_SEC) %
@@ -455,21 +455,21 @@ function buildDemoFrame(
   const contextCandidate = safeCandidates[(baseIndex + 2) % safeCandidates.length];
   const stageHeadingRad = DISPLAY_STAGE_HEADING_RAD;
   const stagedServingCandidate = stageCandidate(
-    site,
+    ueAnchor,
     servingCandidate,
     "serving",
     stageHeadingRad,
     presentationElapsedSec
   );
   const stagedPendingCandidate = stageCandidate(
-    site,
+    ueAnchor,
     pendingCandidate,
     "pending",
     stageHeadingRad,
     presentationElapsedSec
   );
   const stagedContextCandidate = stageCandidate(
-    site,
+    ueAnchor,
     contextCandidate,
     "context",
     stageHeadingRad,
@@ -480,7 +480,7 @@ function buildDemoFrame(
     return {
       context: stagedContextCandidate,
       detail:
-        "The selected site stays locked while the global orbit layer keeps moving. The local stage compresses the geometry so the handover narrative stays readable at city scale.",
+        "The UE anchor stays locked while the global orbit layer keeps moving. The local stage compresses the geometry so the handover narrative stays readable at city scale.",
       phase: "tracking",
       phaseLabel: "Tracking Stable Beam",
       phaseProgress,
@@ -510,12 +510,12 @@ function buildDemoFrame(
     return {
       context: stagedContextCandidate,
       detail:
-        "The serving role flips on the site-stage proxies while the global satellites keep their original orbit motion. This is the core dual-scale demo behavior.",
+        "The serving role flips on the local stage proxies while the global satellites keep their original orbit motion. This is the core dual-scale demo behavior.",
       phase: "switching",
       phaseLabel: "Synthetic Handover Switch",
       phaseProgress,
       pending: stageCandidate(
-        site,
+        ueAnchor,
         servingCandidate,
         "pending",
         stageHeadingRad,
@@ -523,7 +523,7 @@ function buildDemoFrame(
       ),
       recentEvent: `${servingCandidate.id} → ${pendingCandidate.id}`,
       serving: stageCandidate(
-        site,
+        ueAnchor,
         pendingCandidate,
         "serving",
         stageHeadingRad,
@@ -541,15 +541,15 @@ function buildDemoFrame(
     phaseLabel: "Post-Handover Settle",
     phaseProgress,
     pending: stageCandidate(
-      site,
+      ueAnchor,
       servingCandidate,
       "pending",
       stageHeadingRad,
       presentationElapsedSec
     ),
-    recentEvent: `${servingCandidate.id} released site focus`,
+    recentEvent: `${servingCandidate.id} released UE anchor focus`,
     serving: stageCandidate(
-      site,
+      ueAnchor,
       pendingCandidate,
       "serving",
       stageHeadingRad,
@@ -722,8 +722,8 @@ function createStageEntities(dataSource: CustomDataSource): StageEntities {
   };
 }
 
-function applySelectionState(site: FocusSite | null, entities: StageEntities): void {
-  const visible = Boolean(site);
+function applySelectionState(ueAnchor: UeAnchor | null, entities: StageEntities): void {
+  const visible = Boolean(ueAnchor);
   entities.siteMarker.show = visible;
   entities.siteHalo.show = visible;
   entities.footprint.show = visible;
@@ -733,11 +733,11 @@ function applySelectionState(site: FocusSite | null, entities: StageEntities): v
   }
 }
 
-function syncSiteStage(site: FocusSite, entities: StageEntities): void {
-  setEntityPosition(entities.siteMarker, site.positionM);
-  setLabelText(entities.siteMarker, formatSiteMarkerLabel(site));
-  setEntityPosition(entities.siteHalo, site.positionM);
-  setEntityPosition(entities.footprint, site.positionM);
+function syncUeAnchorStage(ueAnchor: UeAnchor, entities: StageEntities): void {
+  setEntityPosition(entities.siteMarker, ueAnchor.positionM);
+  setLabelText(entities.siteMarker, formatUeAnchorMarkerLabel(ueAnchor));
+  setEntityPosition(entities.siteHalo, ueAnchor.positionM);
+  setEntityPosition(entities.footprint, ueAnchor.positionM);
 
   if (!SHOW_DEMO_BUILDING_BOXES) {
     return;
@@ -754,7 +754,7 @@ function syncSiteStage(site: FocusSite, entities: StageEntities): void {
     setEntityPosition(
       entity,
       createLocalOffsetPosition(
-      site,
+      ueAnchor,
       layout.eastM,
       layout.northM,
       layout.heightM / 2
@@ -808,17 +808,17 @@ function hideProxyElements(entities: StageEntities): void {
 function applyBeam(
   lineEntity: Entity,
   coneEntity: Entity,
-  site: FocusSite,
+  ueAnchor: UeAnchor,
   candidate: FocusCandidate,
   role: FocusRole
 ): void {
-  const beam = buildBeamOrientation(candidate.proxyPositionM, site.positionM);
+  const beam = buildBeamOrientation(candidate.proxyPositionM, ueAnchor.positionM);
   const color = colorForRole(role);
 
   lineEntity.show = true;
   lineEntity.polyline!.positions = new ConstantProperty([
     candidate.proxyPositionM,
-    site.positionM
+    ueAnchor.positionM
   ]);
   lineEntity.polyline!.width = new ConstantProperty(
     role === "serving" ? 8 : role === "pending" ? 6 : 3
@@ -844,11 +844,11 @@ function applyBeam(
   );
 }
 
-function syncUi(shell: AppShellMount, site: FocusSite, frame: DemoFrame): void {
-  shell.siteState.textContent = formatSiteHeading(site);
-  shell.siteCoordinates.textContent = formatCoordinates(site);
+function syncUi(shell: AppShellMount, ueAnchor: UeAnchor, frame: DemoFrame): void {
+  shell.ueAnchorState.textContent = formatUeAnchorHeading(ueAnchor);
+  shell.ueAnchorCoordinates.textContent = formatCoordinates(ueAnchor);
   shell.globalHint.textContent =
-    "The orbit layer remains global while the selected site runs a compressed local focus stage derived from the strongest synthetic candidates.";
+    "The orbit layer remains global while the UE anchor runs a compressed local focus stage derived from the strongest synthetic candidates.";
   shell.handoverPhase.textContent = frame.phaseLabel;
   shell.handoverProgressBar.style.transform = `scaleX(${frame.phaseProgress.toFixed(3)})`;
   shell.servingSatellite.textContent = frame.serving.id;
@@ -922,7 +922,7 @@ function createCameraLocalFrame(rangeM: number): CameraLocalFrame {
   };
 }
 
-function createFocusTargetPosition(viewer: Viewer, site: FocusSite, rangeM: number): Cartesian3 {
+function createFocusTargetPosition(viewer: Viewer, ueAnchor: UeAnchor, rangeM: number): Cartesian3 {
   const siteFromTopRatio = 1 - clamp(SITE_CAMERA_SITE_FROM_BOTTOM_RATIO, 0.05, 0.45);
   const normalizedVerticalOffset = 1 - siteFromTopRatio * 2;
   const screenShiftMagnitudeM =
@@ -936,7 +936,7 @@ function createFocusTargetPosition(viewer: Viewer, site: FocusSite, rangeM: numb
   );
 
   return createLocalOffsetPosition(
-    site,
+    ueAnchor,
     targetOffsetLocal.x,
     targetOffsetLocal.y,
     targetOffsetLocal.z
@@ -945,13 +945,13 @@ function createFocusTargetPosition(viewer: Viewer, site: FocusSite, rangeM: numb
 
 function createFocusPose(
   viewer: Viewer,
-  site: FocusSite,
+  ueAnchor: UeAnchor,
   frame: DemoFrame
 ): FocusCameraPose {
   const maxProxyDistanceM = Math.max(
-    Cartesian3.distance(site.positionM, frame.serving.proxyPositionM),
-    Cartesian3.distance(site.positionM, frame.pending.proxyPositionM),
-    Cartesian3.distance(site.positionM, frame.context.proxyPositionM)
+    Cartesian3.distance(ueAnchor.positionM, frame.serving.proxyPositionM),
+    Cartesian3.distance(ueAnchor.positionM, frame.pending.proxyPositionM),
+    Cartesian3.distance(ueAnchor.positionM, frame.context.proxyPositionM)
   );
 
   const focusRadiusM = Math.max(
@@ -959,7 +959,7 @@ function createFocusPose(
     SITE_CAMERA_FOCUS_RADIUS_MIN_M
   );
   const rangeM = Math.max(focusRadiusM * SITE_CAMERA_RANGE_MULTIPLIER, SITE_CAMERA_MIN_RANGE_M);
-  const targetPositionM = createFocusTargetPosition(viewer, site, rangeM);
+  const targetPositionM = createFocusTargetPosition(viewer, ueAnchor,rangeM);
   const targetFrame = Transforms.eastNorthUpToFixedFrame(targetPositionM);
   const cameraLocalFrame = createCameraLocalFrame(rangeM);
   const destinationM = Matrix4.multiplyByPoint(
@@ -1047,8 +1047,8 @@ function createOrientationFromTarget(
   };
 }
 
-function glideToSite(viewer: Viewer, site: FocusSite, frame: DemoFrame): () => void {
-  const endPose = createFocusPose(viewer, site, frame);
+function glideToUeAnchor(viewer: Viewer, ueAnchor: UeAnchor, frame: DemoFrame): () => void {
+  const endPose = createFocusPose(viewer, ueAnchor,frame);
   const startDestinationM = Cartesian3.clone(viewer.camera.positionWC, new Cartesian3());
   const startTargetM = getCurrentCameraTarget(viewer, endPose.rangeM);
   const startedAtMs = performance.now();
@@ -1100,8 +1100,8 @@ function glideToSite(viewer: Viewer, site: FocusSite, frame: DemoFrame): () => v
   };
 }
 
-function flyToSite(viewer: Viewer, site: FocusSite, frame: DemoFrame): void {
-  const endPose = createFocusPose(viewer, site, frame);
+function flyToUeAnchor(viewer: Viewer, ueAnchor: UeAnchor, frame: DemoFrame): void {
+  const endPose = createFocusPose(viewer, ueAnchor,frame);
 
   viewer.camera.cancelFlight();
   viewer.camera.flyToBoundingSphere(new BoundingSphere(endPose.targetPositionM, endPose.focusRadiusM), {
@@ -1122,19 +1122,19 @@ function flyToSite(viewer: Viewer, site: FocusSite, frame: DemoFrame): void {
 }
 
 export interface HandoverFocusDemoController {
-  clearSiteFocus(options?: ClearSiteFocusOptions): void;
+  clearUeAnchor(options?: ClearUeAnchorOptions): void;
   dispose(): Promise<void>;
-  focusSitePosition(positionM: Cartesian3, options?: FocusSiteSelectionOptions): void;
+  placeUeAnchorAt(positionM: Cartesian3, options?: UeAnchorSelectionOptions): void;
 }
 
 export function createHandoverFocusDemoController({
   constellation,
-  onSelectSite,
+  onSelectUeAnchor,
   shell,
   viewer
 }: {
   constellation: SyntheticConstellationRuntime;
-  onSelectSite?: () => void;
+  onSelectUeAnchor?: () => void;
   shell: AppShellMount;
   viewer: Viewer;
 }): HandoverFocusDemoController {
@@ -1146,26 +1146,26 @@ export function createHandoverFocusDemoController({
     ScreenSpaceEventType.LEFT_DOUBLE_CLICK
   );
   let disposed = false;
-  let selectedSite: FocusSite | null = null;
+  let ueAnchor: UeAnchor | null = null;
   let lastServingId: string | null = null;
   let handoverCount = 0;
   let cancelActiveGlide: (() => void) | null = null;
 
-  // Reserve double-click for site selection and keep the rest of Cesium's
-  // native drag / rotate / zoom behavior untouched.
+  // Reserve double-click for UE anchor placement and keep the rest of
+  // Cesium's native drag / rotate / zoom behavior untouched.
   viewerHandler.removeInputAction(ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
 
   setNoSelectionState(shell, constellation.getSatelliteCount());
   applySelectionState(null, entities);
 
   function updateAtTime(time: JulianDate): void {
-    if (disposed || !selectedSite) {
+    if (disposed || !ueAnchor) {
       hideProxyElements(entities);
       return;
     }
 
     const samples = constellation.sampleAtTime(time);
-    const frame = buildDemoFrame(selectedSite, samples);
+    const frame = buildDemoFrame(ueAnchor, samples);
 
     if (frame.serving.id !== lastServingId) {
       if (lastServingId !== null) {
@@ -1177,34 +1177,34 @@ export function createHandoverFocusDemoController({
     applyProxy(entities.proxySatellites[0], frame.serving, "serving");
     applyProxy(entities.proxySatellites[1], frame.pending, "pending");
     applyProxy(entities.proxySatellites[2], frame.context, "context");
-    applyBeam(entities.beamLinks[0], entities.beamCones[0], selectedSite, frame.serving, "serving");
-    applyBeam(entities.beamLinks[1], entities.beamCones[1], selectedSite, frame.pending, "pending");
-    applyBeam(entities.beamLinks[2], entities.beamCones[2], selectedSite, frame.context, "context");
-    syncUi(shell, selectedSite, {
+    applyBeam(entities.beamLinks[0], entities.beamCones[0], ueAnchor, frame.serving, "serving");
+    applyBeam(entities.beamLinks[1], entities.beamCones[1], ueAnchor, frame.pending, "pending");
+    applyBeam(entities.beamLinks[2], entities.beamCones[2], ueAnchor, frame.context, "context");
+    syncUi(shell, ueAnchor, {
       ...frame,
       recentEvent:
         handoverCount > 0 ? `${frame.recentEvent} • HO count ${handoverCount}` : frame.recentEvent
     });
   }
 
-  function selectSite(positionM: Cartesian3, options?: FocusSiteSelectionOptions): void {
-    onSelectSite?.();
-    selectedSite = toFocusSite(positionM, viewer.clock.currentTime, options?.displayName);
+  function placeUeAnchor(positionM: Cartesian3, options?: UeAnchorSelectionOptions): void {
+    onSelectUeAnchor?.();
+    ueAnchor = toUeAnchor(positionM, viewer.clock.currentTime, options?.displayName);
     const previewTime = viewer.clock.currentTime;
     const previewFrame = buildDemoFrame(
-      selectedSite,
+      ueAnchor,
       constellation.sampleAtTime(previewTime)
     );
     lastServingId = null;
     handoverCount = 0;
     cancelActiveGlide?.();
     cancelActiveGlide = null;
-    applySelectionState(selectedSite, entities);
-    syncSiteStage(selectedSite, entities);
+    applySelectionState(ueAnchor, entities);
+    syncUeAnchorStage(ueAnchor, entities);
     if (options?.transition === "glide") {
-      cancelActiveGlide = glideToSite(viewer, selectedSite, previewFrame);
+      cancelActiveGlide = glideToUeAnchor(viewer, ueAnchor, previewFrame);
     } else {
-      flyToSite(viewer, selectedSite, previewFrame);
+      flyToUeAnchor(viewer, ueAnchor, previewFrame);
     }
     updateAtTime(previewTime);
   }
@@ -1220,7 +1220,7 @@ export function createHandoverFocusDemoController({
       return;
     }
 
-    selectSite(positionM, { transition: "glide" });
+    placeUeAnchor(positionM, { transition: "glide" });
   }, ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
 
   const removeTickListener = viewer.clock.onTick.addEventListener((clock) => {
@@ -1228,8 +1228,8 @@ export function createHandoverFocusDemoController({
   });
 
   return {
-    clearSiteFocus(options?: ClearSiteFocusOptions): void {
-      selectedSite = null;
+    clearUeAnchor(options?: ClearUeAnchorOptions): void {
+      ueAnchor = null;
       lastServingId = null;
       handoverCount = 0;
       cancelActiveGlide?.();
@@ -1242,8 +1242,8 @@ export function createHandoverFocusDemoController({
       setNoSelectionState(shell, constellation.getSatelliteCount());
     },
 
-    focusSitePosition(positionM: Cartesian3, options?: FocusSiteSelectionOptions): void {
-      selectSite(positionM, options);
+    placeUeAnchorAt(positionM: Cartesian3, options?: UeAnchorSelectionOptions): void {
+      placeUeAnchor(positionM, options);
     },
 
     async dispose(): Promise<void> {

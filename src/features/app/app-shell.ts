@@ -1,7 +1,7 @@
 export interface AppShellMount {
   viewerRoot: HTMLDivElement;
-  siteState: HTMLElement;
-  siteCoordinates: HTMLElement;
+  ueAnchorState: HTMLElement;
+  ueAnchorCoordinates: HTMLElement;
   globalSatelliteCount: HTMLElement;
   globalHint: HTMLElement;
   handoverPanel: HTMLElement;
@@ -36,15 +36,15 @@ export function mountAppShell(root: HTMLDivElement): AppShellMount {
       <div class="viewer-root" data-viewer-root></div>
       <section
         class="demo-panel demo-panel--left"
-        aria-label="Selection summary"
+        aria-label="UE anchor summary"
         hidden
       >
-        <p class="demo-panel-label">Selection</p>
-        <h2 class="demo-panel-title" data-demo-site-state>
-          Double-click the globe to stage a local handover scene
+        <p class="demo-panel-label">UE anchor</p>
+        <h2 class="demo-panel-title" data-demo-ue-anchor-state>
+          Double-click the globe to place a UE anchor
         </h2>
-        <p class="demo-panel-copy" data-demo-site-coordinates>
-          No site selected.
+        <p class="demo-panel-copy" data-demo-ue-anchor-coordinates>
+          No UE anchor placed.
         </p>
         <div class="demo-chip-row">
           <span class="demo-chip">
@@ -53,8 +53,9 @@ export function mountAppShell(root: HTMLDivElement): AppShellMount {
           </span>
         </div>
         <p class="demo-panel-hint" data-demo-global-hint>
-          The orbit layer stays global. Double-click any site to stage enlarged
-          proxy satellites locally without leaving the page.
+          The orbit layer stays global. Double-click any point on the globe
+          to place a UE anchor and stage a local handover scene without
+          leaving the page.
         </p>
       </section>
       <aside class="demo-panel demo-panel--right" data-demo-handover-panel hidden>
@@ -63,7 +64,7 @@ export function mountAppShell(root: HTMLDivElement): AppShellMount {
           <div class="demo-progress-bar" data-demo-handover-progress></div>
         </div>
         <p class="demo-panel-title" data-demo-handover-phase>
-          Waiting for site selection
+          Waiting for UE anchor
         </p>
         <div class="demo-stat-grid">
           <article class="demo-stat-card demo-stat-card--serving">
@@ -88,7 +89,7 @@ export function mountAppShell(root: HTMLDivElement): AppShellMount {
           </div>
         </div>
         <p class="demo-panel-copy" data-demo-detail>
-          Pick a site to start the synthetic handover loop.
+          Place a UE anchor to start the synthetic handover loop.
         </p>
       </aside>
     </main>
@@ -96,11 +97,15 @@ export function mountAppShell(root: HTMLDivElement): AppShellMount {
 
   return {
     viewerRoot: requireElement(root, "[data-viewer-root]", "viewer root"),
-    siteState: requireElement(root, "[data-demo-site-state]", "site state"),
-    siteCoordinates: requireElement(
+    ueAnchorState: requireElement(
       root,
-      "[data-demo-site-coordinates]",
-      "site coordinates"
+      "[data-demo-ue-anchor-state]",
+      "UE anchor state"
+    ),
+    ueAnchorCoordinates: requireElement(
+      root,
+      "[data-demo-ue-anchor-coordinates]",
+      "UE anchor coordinates"
     ),
     globalSatelliteCount: requireElement(
       root,

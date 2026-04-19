@@ -70,14 +70,14 @@ const unmountLightingToggle = mountLightingToggle(viewer);
 const skyMode = mountSkyModeToggle(viewer);
 const handoverDemo = createHandoverFocusDemoController({
   constellation,
-  onSelectSite: () => {
+  onSelectUeAnchor: () => {
     skyMode.setMode("space");
   },
   shell,
   viewer
 });
 const removeHomeResetListener = viewer.homeButton?.viewModel.command.beforeExecute.addEventListener(() => {
-  handoverDemo.clearSiteFocus({ cancelFlight: false });
+  handoverDemo.clearUeAnchor({ cancelFlight: false });
   skyMode.setMode("blue");
 });
 const unmountNtpuShortcut = mountNtpuShortcut(viewer, handoverDemo, skyMode);

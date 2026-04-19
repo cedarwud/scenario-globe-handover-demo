@@ -42,13 +42,13 @@ export function mountNtpuShortcut(
   button.type = "button";
   button.className = "cesium-button cesium-toolbar-button viewer-ntpu-shortcut";
   button.dataset.ntpuShortcut = "true";
-  button.ariaLabel = "Jump to NTPU preset site";
-  button.title = "Jump to NTPU preset site";
+  button.ariaLabel = "Place UE anchor at NTPU preset";
+  button.title = "Place UE anchor at NTPU preset";
   button.innerHTML = NTPU_ICON;
 
   const handleClick = () => {
     skyMode.setMode("space");
-    handoverDemo.focusSitePosition(
+    handoverDemo.placeUeAnchorAt(
       Cartesian3.fromDegrees(
         NTPU_SITE.longitudeDeg,
         NTPU_SITE.latitudeDeg,
