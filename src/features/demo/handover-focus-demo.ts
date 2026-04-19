@@ -126,12 +126,22 @@ const SITE_STAGE_PROXY_MODEL_URI = "models/sat.glb";
 const SAT_MODEL_IBL_FACTOR = new Cartesian2(1.0, 1.0);
 const SAT_MODEL_LIGHT_COLOR = Color.fromCssColorString("#fff6e6");
 const DISPLAY_STAGE_HEADING_RAD = 0;
-const SITE_CAMERA_PITCH_RAD = -0.12;
+// Camera tilts the composition up (positive pitch drops the camera
+// slightly below target and aims the view above horizontal) so the
+// arc envelope (§6.2) with peak at ~1200 m and feet near ground fits
+// inside the vertical FOV for proxies at any arc-plane azimuth.
+// Pulled the range multiplier back to 1.5 so the envelope fits the
+// horizontal FOV even when the active proxy azimuths spread to ±90°
+// off the stage heading. UE sits ~18% from the bottom to free the
+// upper region for arcs + serving cone strobe. A small +0.10 keeps
+// the camera above typical Taiwan terrain south of NTPU (at ~590 m
+// absolute altitude) while still redirecting the view upward.
+const SITE_CAMERA_PITCH_RAD = 0.1;
 const SITE_CAMERA_MIN_RANGE_M = 620;
-const SITE_CAMERA_SITE_FROM_BOTTOM_RATIO = 0.12;
+const SITE_CAMERA_SITE_FROM_BOTTOM_RATIO = 0.18;
 const SITE_CAMERA_FOCUS_RADIUS_MIN_M = 560;
 const SITE_CAMERA_FOCUS_RADIUS_SCALE = 0.76;
-const SITE_CAMERA_RANGE_MULTIPLIER = 1.28;
+const SITE_CAMERA_RANGE_MULTIPLIER = 1.5;
 const SITE_CAMERA_GLIDE_DURATION_MS = 980;
 const SHOW_DEMO_BUILDING_BOXES = false;
 const PROXY_RADIUS_MIN_M = 700;
