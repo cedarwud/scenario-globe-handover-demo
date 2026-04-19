@@ -39,6 +39,7 @@ interface FocusSite {
   longitudeDeg: number;
   positionM: Cartesian3;
   selectedAt: JulianDate;
+  selectedAtPerformanceMs: number;
   surfaceHeightM: number;
 }
 
@@ -103,7 +104,7 @@ interface StageEntities {
   siteMarker: Entity;
 }
 
-const DEMO_CYCLE_DURATION_SEC = 12;
+const LOCAL_DEMO_CYCLE_DURATION_REAL_SEC = 8;
 const SITE_STAGE_PROXY_MODEL_URI = "models/sat.glb";
 const SAT_MODEL_IBL_FACTOR = new Cartesian2(1.0, 1.0);
 const SAT_MODEL_LIGHT_COLOR = Color.fromCssColorString("#fff6e6");
@@ -148,12 +149,44 @@ const STAGE_PROXY_SLOTS = {
   { forwardM: number; lateralM: number; upM: number }
 >;
 const STAGE_PROXY_MOTION_ENVELOPES = {
-  serving: { forwardM: 170, lateralM: 180, upM: 280 },
-  pending: { forwardM: 210, lateralM: 220, upM: 240 },
-  context: { forwardM: 240, lateralM: 260, upM: 320 }
+  serving: { forwardM: 240, lateralM: 240, upM: 340 },
+  pending: { forwardM: 320, lateralM: 320, upM: 280 },
+  context: { forwardM: 320, lateralM: 340, upM: 420 }
 } as const satisfies Record<
   FocusRole,
   { forwardM: number; lateralM: number; upM: number }
+>;
+const STAGE_PROXY_PRESENTATION_DRIFT = {
+  serving: {
+    cycleSec: 6.6,
+    forwardM: 76,
+    lateralM: 118,
+    phaseOffsetRad: 0.3,
+    upM: 112
+  },
+  pending: {
+    cycleSec: 5.9,
+    forwardM: 126,
+    lateralM: 184,
+    phaseOffsetRad: 2.15,
+    upM: 96
+  },
+  context: {
+    cycleSec: 7.4,
+    forwardM: 92,
+    lateralM: 148,
+    phaseOffsetRad: 4.05,
+    upM: 156
+  }
+} as const satisfies Record<
+  FocusRole,
+  {
+    cycleSec: number;
+    forwardM: number;
+    lateralM: number;
+    phaseOffsetRad: number;
+    upM: number;
+  }
 >;
 
 function clamp(value: number, min: number, max: number): number {
@@ -164,19 +197,32 @@ function createStageProxyPosition(
   site: FocusSite,
   candidate: FocusCandidate,
   role: FocusRole,
-  stageHeadingRad: number
+  stageHeadingRad: number,
+  presentationElapsedSec: number
 ): Cartesian3 {
   const slot = STAGE_PROXY_SLOTS[role];
   const envelope = STAGE_PROXY_MOTION_ENVELOPES[role];
+  const drift = STAGE_PROXY_PRESENTATION_DRIFT[role];
   const relativeAzimuthRad = CesiumMath.negativePiToPi(candidate.azimuthRad - stageHeadingRad);
   const elevationNorm = clamp((candidate.elevationDeg + 8) / 88, 0, 1);
+  const driftPhaseRad =
+    ((presentationElapsedSec / drift.cycleSec) * Math.PI * 2) + drift.phaseOffsetRad;
   const forwardEast = Math.sin(stageHeadingRad);
   const forwardNorth = Math.cos(stageHeadingRad);
   const rightEast = Math.cos(stageHeadingRad);
   const rightNorth = -Math.sin(stageHeadingRad);
-  const forwardM = slot.forwardM + Math.cos(relativeAzimuthRad) * envelope.forwardM;
-  const lateralM = slot.lateralM + Math.sin(relativeAzimuthRad) * envelope.lateralM;
-  const upM = slot.upM + CesiumMath.lerp(-envelope.upM * 0.38, envelope.upM, elevationNorm);
+  const forwardM =
+    slot.forwardM +
+    Math.cos(relativeAzimuthRad) * envelope.forwardM +
+    Math.sin(driftPhaseRad) * drift.forwardM;
+  const lateralM =
+    slot.lateralM +
+    Math.sin(relativeAzimuthRad) * envelope.lateralM +
+    Math.cos(driftPhaseRad) * drift.lateralM;
+  const upM =
+    slot.upM +
+    CesiumMath.lerp(-envelope.upM * 0.38, envelope.upM, elevationNorm) +
+    Math.sin(driftPhaseRad * 1.16 + 0.48) * drift.upM;
   const eastM = rightEast * lateralM + forwardEast * forwardM;
   const northM = rightNorth * lateralM + forwardNorth * forwardM;
 
@@ -187,11 +233,18 @@ function stageCandidate(
   site: FocusSite,
   candidate: FocusCandidate,
   role: FocusRole,
-  stageHeadingRad: number
+  stageHeadingRad: number,
+  presentationElapsedSec: number
 ): FocusCandidate {
   return {
     ...candidate,
-    proxyPositionM: createStageProxyPosition(site, candidate, role, stageHeadingRad)
+    proxyPositionM: createStageProxyPosition(
+      site,
+      candidate,
+      role,
+      stageHeadingRad,
+      presentationElapsedSec
+    )
   };
 }
 
@@ -296,12 +349,19 @@ function toFocusSite(
     longitudeDeg: (cartographic.longitude * 180) / Math.PI,
     positionM: stagedPositionM,
     selectedAt: JulianDate.clone(time),
+    selectedAtPerformanceMs: performance.now(),
     surfaceHeightM: stagedSurfaceHeightM
   };
 }
 
 function createLocalFrame(site: FocusSite): Matrix4 {
   return Transforms.eastNorthUpToFixedFrame(site.positionM);
+}
+
+function getPresentationElapsedSec(site: FocusSite): number {
+  // Keep the local focus motion readable for demo narration even while the
+  // shared globe clock runs faster to show orbital context.
+  return Math.max((performance.now() - site.selectedAtPerformanceMs) / 1000, 0);
 }
 
 function createLocalOffsetPosition(
@@ -366,8 +426,7 @@ function evaluateCandidate(site: FocusSite, sample: ConstellationSatelliteSample
 
 function buildDemoFrame(
   site: FocusSite,
-  samples: ReadonlyArray<ConstellationSatelliteSample>,
-  time: JulianDate
+  samples: ReadonlyArray<ConstellationSatelliteSample>
 ): DemoFrame {
   const rankedCandidates = samples
     .map((sample) => evaluateCandidate(site, sample))
@@ -381,12 +440,17 @@ function buildDemoFrame(
           ...rankedCandidates,
           ...rankedCandidates.slice(0, Math.max(0, 3 - rankedCandidates.length))
         ];
-  const elapsedSec = JulianDate.secondsDifference(time, site.selectedAt);
-  const phaseProgress = ((elapsedSec % DEMO_CYCLE_DURATION_SEC) + DEMO_CYCLE_DURATION_SEC) %
-    DEMO_CYCLE_DURATION_SEC /
-    DEMO_CYCLE_DURATION_SEC;
-  const baseIndex = Math.floor(elapsedSec / DEMO_CYCLE_DURATION_SEC) % safeCandidates.length;
-  const servingCandidate = safeCandidates[(baseIndex + safeCandidates.length) % safeCandidates.length];
+  const presentationElapsedSec = getPresentationElapsedSec(site);
+  const phaseProgress =
+    (((presentationElapsedSec % LOCAL_DEMO_CYCLE_DURATION_REAL_SEC) +
+      LOCAL_DEMO_CYCLE_DURATION_REAL_SEC) %
+      LOCAL_DEMO_CYCLE_DURATION_REAL_SEC) /
+    LOCAL_DEMO_CYCLE_DURATION_REAL_SEC;
+  const baseIndex =
+    Math.floor(presentationElapsedSec / LOCAL_DEMO_CYCLE_DURATION_REAL_SEC) %
+    safeCandidates.length;
+  const servingCandidate =
+    safeCandidates[(baseIndex + safeCandidates.length) % safeCandidates.length];
   const pendingCandidate = safeCandidates[(baseIndex + 1) % safeCandidates.length];
   const contextCandidate = safeCandidates[(baseIndex + 2) % safeCandidates.length];
   const stageHeadingRad = DISPLAY_STAGE_HEADING_RAD;
@@ -394,19 +458,22 @@ function buildDemoFrame(
     site,
     servingCandidate,
     "serving",
-    stageHeadingRad
+    stageHeadingRad,
+    presentationElapsedSec
   );
   const stagedPendingCandidate = stageCandidate(
     site,
     pendingCandidate,
     "pending",
-    stageHeadingRad
+    stageHeadingRad,
+    presentationElapsedSec
   );
   const stagedContextCandidate = stageCandidate(
     site,
     contextCandidate,
     "context",
-    stageHeadingRad
+    stageHeadingRad,
+    presentationElapsedSec
   );
 
   if (phaseProgress < 0.42) {
@@ -447,9 +514,21 @@ function buildDemoFrame(
       phase: "switching",
       phaseLabel: "Synthetic Handover Switch",
       phaseProgress,
-      pending: stageCandidate(site, servingCandidate, "pending", stageHeadingRad),
+      pending: stageCandidate(
+        site,
+        servingCandidate,
+        "pending",
+        stageHeadingRad,
+        presentationElapsedSec
+      ),
       recentEvent: `${servingCandidate.id} → ${pendingCandidate.id}`,
-      serving: stageCandidate(site, pendingCandidate, "serving", stageHeadingRad),
+      serving: stageCandidate(
+        site,
+        pendingCandidate,
+        "serving",
+        stageHeadingRad,
+        presentationElapsedSec
+      ),
       stageHeadingRad
     };
   }
@@ -461,9 +540,21 @@ function buildDemoFrame(
     phase: "post",
     phaseLabel: "Post-Handover Settle",
     phaseProgress,
-    pending: stageCandidate(site, servingCandidate, "pending", stageHeadingRad),
+    pending: stageCandidate(
+      site,
+      servingCandidate,
+      "pending",
+      stageHeadingRad,
+      presentationElapsedSec
+    ),
     recentEvent: `${servingCandidate.id} released site focus`,
-    serving: stageCandidate(site, pendingCandidate, "serving", stageHeadingRad),
+    serving: stageCandidate(
+      site,
+      pendingCandidate,
+      "serving",
+      stageHeadingRad,
+      presentationElapsedSec
+    ),
     stageHeadingRad
   };
 }
@@ -1074,7 +1165,7 @@ export function createHandoverFocusDemoController({
     }
 
     const samples = constellation.sampleAtTime(time);
-    const frame = buildDemoFrame(selectedSite, samples, time);
+    const frame = buildDemoFrame(selectedSite, samples);
 
     if (frame.serving.id !== lastServingId) {
       if (lastServingId !== null) {
@@ -1102,8 +1193,7 @@ export function createHandoverFocusDemoController({
     const previewTime = viewer.clock.currentTime;
     const previewFrame = buildDemoFrame(
       selectedSite,
-      constellation.sampleAtTime(previewTime),
-      previewTime
+      constellation.sampleAtTime(previewTime)
     );
     lastServingId = null;
     handoverCount = 0;
