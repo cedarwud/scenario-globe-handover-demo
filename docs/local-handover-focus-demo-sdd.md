@@ -400,7 +400,7 @@ The handover phase loop is a single 8-second real-time cycle with four phases.
 
 Input events:
 
-- `LEFT_DOUBLE_CLICK` on globe → `selectSite(positionM)`
+- `LEFT_DOUBLE_CLICK` on globe → place a UE anchor at the picked position
 - `homeButton.command.beforeExecute` → `clearUeAnchor()`
 - `NTPU` preset → `placeUeAnchorAt(NTPU, { transition: "fly" })`
 
