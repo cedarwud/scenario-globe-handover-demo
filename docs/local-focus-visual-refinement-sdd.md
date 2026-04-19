@@ -46,6 +46,8 @@ follow-on. In practice that means:
 - the local focus interaction contract is already active
 - remaining polish work should stay presentation-only unless the repo explicitly reopens for realism work
 
+Scene semantics — UE model, sky-pass motion model, link and beam model, synthetic handover decision model, synthetic beam-hopping model, phase contract, and channel separation rules — are owned by `docs/local-handover-focus-demo-sdd.md` §5–§10. This document does not redefine those semantics; it only tunes how they are presented.
+
 ## 4. Explicit Non-Goals
 
 This refinement track will **not** do any of the following:
@@ -94,7 +96,7 @@ The next slices should improve only the presentation layer:
    - proxy satellites
    - serving / pending beam cones
    - the selected site marker and local stage
-6. keep serving / pending / context proxies inside readable role slots, but allow constrained per-role motion so the overhead scene does not collapse into a static tableau
+6. keep serving / pending / context proxy motion inside the stage envelope; arc trajectory, role assignment, identity rotation, and HO / BH channel separation are defined in canonical SDD §6–§7 and are not redefined here
 
 ## 7. Landed Cleanup Slice
 
@@ -123,7 +125,7 @@ After the cleanup slice, later work should only explore lightweight presentation
 1. stronger local contrast and deemphasis of distant context
 2. clearer satellite/beam hierarchy in the upper half of the frame
 3. restrained styling changes for context geometry
-4. constrained local proxy motion envelopes that preserve stage readability while keeping the handover scene visibly alive
+4. polish on the stage-local arc trajectory defined in canonical SDD §6 (this document does not redefine the arc contract, proxy count, or identity rotation behavior)
 5. optional local-focus-only atmosphere, fog, or tint controls if they stay fast and reversible
 
 If those steps still do not reach the target quality, the remaining gap should be treated as a data/asset limitation rather than hidden with fake local imagery.
