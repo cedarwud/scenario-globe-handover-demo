@@ -81,8 +81,8 @@ Notes:
 Purpose:
 
 - turn a picked site into a same-page local scene
-- compress candidate geometry into a readable site-stage composition
-- drive serving / pending / context proxy satellites and beams
+- compress candidate geometry into a readable elevated local sky corridor above the site
+- drive three proxy satellites with a resident serving beam and a phase-gated pending preview cue
 
 Primary file:
 
@@ -91,7 +91,17 @@ Primary file:
 Key rule:
 
 The local focus is **not** a literal physically correct zoom of the global scene.
-It is a compressed presentation layer derived from the current synthetic candidates.
+It is a compressed presentation layer derived from the current synthetic candidates, and it should read as a globe-local sky window rather than a separate observer-sky simulator.
+
+Current implementation note:
+
+- `src/features/demo/handover-focus-demo.ts` still owns the local-focus controller as one file, but the internal runtime seam is now explicit:
+  - local handover truth-frame building
+  - local handover presentation-frame derivation
+  - local handover shell-frame derivation
+  - Cesium render application
+  - shell / text synchronization
+- a second Viewer instance or separate local-view runtime is not part of the current architecture direction
 
 ### 2.5 Toolbar-Level Demo Controls
 
@@ -139,14 +149,15 @@ The active interaction contract is:
 4. local focus shows:
    - closer camera composition
    - local proxy satellites
-   - beam links and cones
-   - synthetic serving / pending / context narrative
+   - a resident serving beam / cone
+   - a pending preview cue during `prepared` / `switching`
+   - an unlinked context proxy that still participates in the corridor narrative
 5. `Home` exits local focus and returns to the wide globe view
 
 Sky behavior:
 
-- entering local focus switches to `space` mode
-- going `Home` restores `blue` mode
+- local focus preserves the current sky mode instead of auto-switching it
+- the default scene baseline uses `blue` sky mode
 - the toolbar sky button can still override manually
 
 ## 4. Data And Control Flow
@@ -163,8 +174,16 @@ The runtime flow is now:
 8. the local focus controller:
    - samples the current constellation
    - ranks candidates around the site
-   - compresses them into proxy stage positions
-   - updates site marker, proxy satellites, beam links, beam cones, and optional HUD state
+   - compresses them into elevated local sky-corridor proxy positions
+   - updates site marker, proxy satellites, serving beam, pending preview cue, and optional HUD state
+
+Current seam inside the same runtime:
+
+1. build local handover truth
+2. derive local presentation state from that truth
+3. derive shell / explainer state from that truth
+4. render the resulting presentation state into Cesium entities
+5. sync shell / text state separately from Cesium mutation
 
 ## 5. Deliberate Demo Seams
 
@@ -172,7 +191,7 @@ These seams are intentional and should not be misread as bugs:
 
 - global orbit truth is synthetic
 - local handover logic is synthetic
-- proxy-satellite positions are compressed for readability
+- proxy-satellite positions are compressed into an elevated local sky corridor for readability
 - beam values are narrative display values
 - OSM Buildings are context geometry, not curated hero-scene assets
 

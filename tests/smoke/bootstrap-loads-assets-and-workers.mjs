@@ -82,8 +82,7 @@ function dumpDomInHeadlessBrowser(browserCommand, baseUrl, extraArgs = []) {
         "--disable-default-apps",
         "--disable-sync",
         "--metrics-recording-only",
-        "--run-all-compositor-stages-before-draw",
-        "--virtual-time-budget=8000",
+        "--timeout=8000",
         `--user-data-dir=${userDataDir}`,
         "--dump-dom",
         ...extraArgs,
@@ -160,6 +159,8 @@ function verifyBootstrapInHeadlessBrowser(baseUrl) {
     const hasLightingToggle = dom.includes('data-lighting-toggle="true"');
     const hasLightingToggleDisabled = dom.includes('data-lighting-enabled="false"');
     const hasUnpressedLightingToggle = dom.includes('aria-pressed="false"');
+    const bootstrapStateMatch = dom.match(/data-bootstrap-state="([^"]+)"/);
+    const bootstrapDetailMatch = dom.match(/data-bootstrap-detail="([^"]+)"/);
 
     if (
       hasReadyState &&
@@ -172,7 +173,14 @@ function verifyBootstrapInHeadlessBrowser(baseUrl) {
       return;
     }
 
-    lastFailure = `Browser bootstrap smoke did not reach a ready viewer during ${attempt.label}.`;
+    lastFailure =
+      `Browser bootstrap smoke did not reach a ready viewer during ${attempt.label}. ` +
+      `status=${result.status} signal=${result.signal ?? "none"} stdoutLength=${dom.length} ` +
+      `bootstrapState=${bootstrapStateMatch?.[1] ?? "missing"} ` +
+      `bootstrapDetail=${bootstrapDetailMatch?.[1] ?? "missing"} ` +
+      `hasViewerShell=${hasViewerShell} hasLightingToggle=${hasLightingToggle} ` +
+      `hasLightingToggleDisabled=${hasLightingToggleDisabled} ` +
+      `hasUnpressedLightingToggle=${hasUnpressedLightingToggle}.`;
   }
 
   throw new Error(lastFailure);
@@ -180,31 +188,36 @@ function verifyBootstrapInHeadlessBrowser(baseUrl) {
 
 function startStaticServer() {
   return new Promise((resolve, reject) => {
-    const serverProcess = spawn(
-      "python3",
-      ["-u", "-m", "http.server", "0", "--bind", "127.0.0.1", "-d", distRoot],
-      {
-        cwd: repoRoot,
-        stdio: ["ignore", "pipe", "pipe"]
-      }
-    );
+    const serverScript = [
+      "import functools, http.server",
+      "class SilentHandler(http.server.SimpleHTTPRequestHandler):",
+      "    def log_message(self, format, *args):",
+      "        pass",
+      `server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), functools.partial(SilentHandler, directory=${JSON.stringify(
+        distRoot
+      )}))`,
+      "print(server.server_port, flush=True)",
+      "try:",
+      "    server.serve_forever()",
+      "finally:",
+      "    server.server_close()"
+    ].join("\n");
+    const serverProcess = spawn("python3", ["-u", "-c", serverScript], {
+      cwd: repoRoot,
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+
+    const timeout = setTimeout(() => {
+      serverProcess.kill("SIGTERM");
+      reject(new Error("Timed out waiting for smoke server."));
+    }, 5000);
 
     let settled = false;
     let serverLog = "";
-    const readyPattern = /Serving HTTP on [^ ]+ port (\d+)/;
-    const timeout = setTimeout(() => {
-      if (settled) {
-        return;
-      }
-
-      settled = true;
-      serverProcess.kill("SIGTERM");
-      reject(new Error(`Timed out waiting for smoke server. Output: ${serverLog}`));
-    }, 5000);
 
     const handleOutput = (chunk) => {
       serverLog += chunk.toString();
-      const match = serverLog.match(readyPattern);
+      const match = serverLog.match(/(\d+)/);
 
       if (match && !settled) {
         settled = true;
@@ -219,11 +232,6 @@ function startStaticServer() {
     serverProcess.stdout.on("data", handleOutput);
     serverProcess.stderr.on("data", handleOutput);
     serverProcess.once("error", (error) => {
-      if (settled) {
-        return;
-      }
-
-      settled = true;
       clearTimeout(timeout);
       reject(error);
     });

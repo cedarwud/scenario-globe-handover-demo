@@ -1,7 +1,7 @@
 # Local Focus Visual Refinement SDD
 
-**Status:** Accepted current-boundary note  
-**Date:** 2026-04-18  
+**Status:** Accepted current-boundary note
+**Date:** 2026-04-21
 **Applies to:** `scenario-globe-handover-demo`  
 **Primary goal:** Improve the same-page local focus presentation without leaving Cesium's native runtime or introducing heavy site-authoring workflows
 
@@ -46,7 +46,7 @@ follow-on. In practice that means:
 - the local focus interaction contract is already active
 - remaining polish work should stay presentation-only unless the repo explicitly reopens for realism work
 
-Scene semantics — UE model, sky-pass motion model, link and beam model, synthetic handover decision model, synthetic beam-hopping model, phase contract, and channel separation rules — are owned by `docs/local-handover-focus-demo-sdd.md` §5–§10. This document does not redefine those semantics; it only tunes how they are presented.
+Scene semantics — UE model, elevated local sky-corridor motion model, link and beam model, synthetic handover decision model, synthetic beam-hopping model, phase contract, and channel separation rules — are owned by `docs/local-handover-focus-demo-sdd.md` §5–§10. This document does not redefine those semantics; it only tunes how they are presented.
 
 ## 4. Explicit Non-Goals
 
@@ -94,9 +94,34 @@ The next slices should improve only the presentation layer:
 4. let raw OSM and globe imagery recede into background context
 5. concentrate visual emphasis on:
    - proxy satellites
-   - serving / pending beam cones
+   - the resident serving beam and preview-only pending cue
    - the selected site marker and local stage
-6. keep serving / pending / context proxy motion inside the stage envelope; arc trajectory, role assignment, identity rotation, and HO / BH channel separation are defined in canonical SDD §6–§7 and are not redefined here
+6. keep serving / pending / context proxy motion inside the elevated local sky-corridor envelope; traverse trajectory, role assignment, identity rotation, and HO / BH channel separation are defined in canonical SDD §6–§7 and are not redefined here
+
+### 6.1 Architecture Baseline For Further Polish
+
+Further local-focus polish should not keep stacking new cue logic into one
+monolithic Cesium controller.
+
+The repo now carries a **single-Viewer truth/presentation seam** in
+`src/features/demo/handover-focus-demo.ts`:
+
+- truth side: serving / pending / context semantics, corridor binding, HO phase,
+  and BH phase
+- presentation side: links, cones, tags, and emphasis grammar derived from that truth
+- shell side: explainer text and optional panel-facing state derived separately from truth
+
+Under the current canonical visual grammar, that presentation side owns one
+specific contraction: a resident serving UE-coupling cue, a preview-only
+pending cue during `prepared` / `switching`, and no UE link for the context
+role.
+
+This is explicitly **not** a directive to introduce two Cesium viewers or a
+separate local-view runtime. The refinement track remains one-page and
+one-Viewer.
+
+Further polish must stay inside that landed seam rather than re-coupling
+semantic truth, shell wording, and Cesium mutation into one path.
 
 ## 7. Landed Cleanup Slice
 
@@ -122,11 +147,12 @@ This refinement track is on the right path if:
 
 After the cleanup slice, later work should only explore lightweight presentation improvements such as:
 
-1. stronger local contrast and deemphasis of distant context
-2. clearer satellite/beam hierarchy in the upper half of the frame
-3. restrained styling changes for context geometry
-4. polish on the stage-local arc trajectory defined in canonical SDD §6 (this document does not redefine the arc contract, proxy count, or identity rotation behavior)
-5. optional local-focus-only atmosphere, fog, or tint controls if they stay fast and reversible
+1. truth/presentation separation for the local-focus renderer while staying in one Cesium `Viewer`
+2. stronger local contrast and deemphasis of distant context
+3. clearer satellite/beam hierarchy in the upper half of the frame
+4. restrained styling changes for context geometry
+5. polish on the elevated local sky-corridor trajectory defined in canonical SDD §6 (this document does not redefine the motion contract, proxy count, or identity rotation behavior)
+6. optional local-focus-only atmosphere, fog, or tint controls if they stay fast and reversible
 
 If those steps still do not reach the target quality, the remaining gap should be treated as a data/asset limitation rather than hidden with fake local imagery.
 

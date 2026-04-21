@@ -22,8 +22,8 @@ choices, but the active repo story is now:
 - reuse `public/models/sat.glb` in both global and local layers
 - mount Cesium OSM Buildings as a best-effort city-scale context layer by default
 - keep the local scene synthetic:
-  - serving / pending / context proxy satellites
-  - beam links and translucent cones
+  - serving / pending / context proxy satellites in an elevated local sky corridor
+  - one resident serving beam plus a preview-only pending candidate cue
   - synthetic phase loop and text narrative
 
 ## What This Repo Does Not Claim
@@ -46,10 +46,10 @@ before spending time on realism or asset-authoring work.
    - click the `NTPU` toolbar button to jump to `National Taipei University, Taiwan`
 4. The demo enters a local focus on the same page:
    - the camera moves into a closer local composition
-   - the sky switches to `space` mode
-   - enlarged proxy satellites appear above the selected site
-   - serving / pending / context beams stage a synthetic handover loop
-5. Use the native `Home` button to clear local focus, return to the wide globe view, and restore blue-sky mode.
+   - the current sky mode is preserved; local focus does not auto-switch it
+   - enlarged proxy satellites appear in an elevated local sky corridor above the selected site
+   - the serving beam stays resident, the pending candidate only appears as a preview cue around the switch, and the context proxy stays unlinked
+5. Use the native `Home` button to clear local focus and return to the wide globe view.
 
 Other toolbar controls:
 
@@ -88,8 +88,8 @@ The current runtime is split into six narrow surfaces:
   - orbit guide dots
 - `local handover focus`
   - site picking
-  - compressed proxy-satellite stage
-  - beam cues
+  - compressed elevated local sky corridor
+  - serving beam + pending preview cue
 - `toolbar shortcuts`
   - sky toggle
   - lighting toggle

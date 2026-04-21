@@ -1,6 +1,5 @@
 import { Cartesian3, type Viewer } from "cesium";
 import type { HandoverFocusDemoController } from "../demo/handover-focus-demo";
-import type { SkyModeController } from "./sky-mode";
 
 const NTPU_ICON = `
 <svg class="viewer-ntpu-shortcut-icon" viewBox="0 0 32 32" aria-hidden="true">
@@ -30,8 +29,7 @@ function getInsertBeforeNode(toolbar: HTMLElement): ChildNode | null {
 
 export function mountNtpuShortcut(
   viewer: Viewer,
-  handoverDemo: HandoverFocusDemoController,
-  skyMode: SkyModeController
+  handoverDemo: HandoverFocusDemoController
 ): () => void {
   const toolbar = getToolbar(viewer);
   if (!toolbar) {
@@ -47,7 +45,6 @@ export function mountNtpuShortcut(
   button.innerHTML = NTPU_ICON;
 
   const handleClick = () => {
-    skyMode.setMode("space");
     handoverDemo.placeUeAnchorAt(
       Cartesian3.fromDegrees(
         NTPU_SITE.longitudeDeg,

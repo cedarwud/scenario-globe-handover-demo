@@ -1,5 +1,6 @@
 export interface AppShellMount {
   viewerRoot: HTMLDivElement;
+  ueAnchorPanel: HTMLElement;
   ueAnchorState: HTMLElement;
   ueAnchorCoordinates: HTMLElement;
   globalSatelliteCount: HTMLElement;
@@ -13,6 +14,8 @@ export interface AppShellMount {
   pendingMetric: HTMLElement;
   contextSatellite: HTMLElement;
   recentEvent: HTMLElement;
+  localDensitySummary: HTMLElement;
+  localDensityNote: HTMLElement;
   detail: HTMLElement;
 }
 
@@ -37,6 +40,7 @@ export function mountAppShell(root: HTMLDivElement): AppShellMount {
       <section
         class="demo-panel demo-panel--left"
         aria-label="UE anchor summary"
+        data-demo-ue-panel
         hidden
       >
         <p class="demo-panel-label">UE anchor</p>
@@ -88,6 +92,18 @@ export function mountAppShell(root: HTMLDivElement): AppShellMount {
             <p class="demo-summary-value" data-demo-recent-event>—</p>
           </div>
         </div>
+        <div class="demo-density-callout">
+          <p class="demo-summary-label">Local Density Lookup</p>
+          <p
+            class="demo-summary-value demo-density-summary"
+            data-demo-local-density-summary
+          >
+            Waiting for UE anchor.
+          </p>
+          <p class="demo-panel-hint demo-density-note" data-demo-local-density-note>
+            Demo lookup uses a repo-owned static table. Research baseline 10° stays separate from the local-view 20° presentation lookup.
+          </p>
+        </div>
         <p class="demo-panel-copy" data-demo-detail>
           Place a UE anchor to start the synthetic handover loop.
         </p>
@@ -97,6 +113,7 @@ export function mountAppShell(root: HTMLDivElement): AppShellMount {
 
   return {
     viewerRoot: requireElement(root, "[data-viewer-root]", "viewer root"),
+    ueAnchorPanel: requireElement(root, "[data-demo-ue-panel]", "UE anchor panel"),
     ueAnchorState: requireElement(
       root,
       "[data-demo-ue-anchor-state]",
@@ -154,6 +171,16 @@ export function mountAppShell(root: HTMLDivElement): AppShellMount {
       "context satellite"
     ),
     recentEvent: requireElement(root, "[data-demo-recent-event]", "recent event"),
+    localDensitySummary: requireElement(
+      root,
+      "[data-demo-local-density-summary]",
+      "local density summary"
+    ),
+    localDensityNote: requireElement(
+      root,
+      "[data-demo-local-density-note]",
+      "local density note"
+    ),
     detail: requireElement(root, "[data-demo-detail]", "detail")
   };
 }

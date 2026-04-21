@@ -197,6 +197,22 @@ body {
   font-weight: 600;
 }
 
+.demo-density-callout {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(84, 131, 173, 0.22);
+  background: linear-gradient(180deg, rgba(20, 40, 57, 0.42), rgba(10, 21, 32, 0.18));
+}
+
+.demo-density-summary {
+  margin-top: 8px;
+}
+
+.demo-density-note {
+  margin-top: 8px;
+}
+
 .viewer-lighting-toggle {
   height: 32px;
   width: 32px;

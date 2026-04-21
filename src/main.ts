@@ -64,15 +64,17 @@ const shell = mountAppShell(app);
 const viewer = createViewer({ container: shell.viewerRoot });
 viewer.clock.shouldAnimate = true;
 viewer.clock.multiplier = 36;
+// 關閉 Cesium 的 data-source auto-suspend：只要某個 visualizer 尚未 ready
+// (billboard/label/model 的 async 資源)，Cesium 會把 clock.canAnimate 設為 false
+// 讓 clock 凍結。local view 進場後會持續 mount stage entities，這個機制
+// 會讓時鐘看似「加速但不動」。
+viewer.allowDataSourcesToSuspendAnimation = false;
 
 const constellation = createSyntheticConstellationRuntime(viewer);
 const unmountLightingToggle = mountLightingToggle(viewer);
 const skyMode = mountSkyModeToggle(viewer);
 const handoverDemo = createHandoverFocusDemoController({
   constellation,
-  onSelectUeAnchor: () => {
-    skyMode.setMode("space");
-  },
   shell,
   viewer
 });
@@ -80,7 +82,7 @@ const removeHomeResetListener = viewer.homeButton?.viewModel.command.beforeExecu
   handoverDemo.clearUeAnchor({ cancelFlight: false });
   skyMode.setMode("blue");
 });
-const unmountNtpuShortcut = mountNtpuShortcut(viewer, handoverDemo, skyMode);
+const unmountNtpuShortcut = mountNtpuShortcut(viewer, handoverDemo);
 const removeMorphCompleteListener = viewer.scene.morphComplete.addEventListener(() => {
   refreshLightingForSceneMode(viewer);
 });

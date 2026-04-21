@@ -14,7 +14,6 @@ import {
 const EARTH_RADIUS_KM = 6378.137;
 const EARTH_ROTATION_RATE_RAD_PER_SEC = 7.2921159e-5;
 const ORBIT_SAMPLE_COUNT = 160;
-const ORBIT_GUIDE_STEP = 8;
 const SATELLITE_MODEL_URI = "models/sat.glb";
 const SATELLITE_MODEL_IBL_FACTOR = new Cartesian2(1.0, 1.0);
 const SATELLITE_MODEL_LIGHT_COLOR = Color.fromCssColorString("#fff6e6");
@@ -40,11 +39,16 @@ interface SyntheticSatelliteDefinition {
 interface SatelliteEntityRecord {
   definition: SyntheticSatelliteDefinition;
   entity: Entity;
+  orbitLineEntity?: Entity;
+  positionProperty: ConstantPositionProperty;
 }
 
 export interface SyntheticConstellationRuntime {
   getSatelliteCount(): number;
+  getGlobePreviewOrbitIds(): readonly string[];
   sampleAtTime(time: JulianDate): ReadonlyArray<ConstellationSatelliteSample>;
+  setHighlightedOrbitIds(ids: readonly string[]): void;
+  setVisible(visible: boolean): void;
   dispose(): Promise<void>;
 }
 
@@ -113,7 +117,8 @@ function buildSyntheticConstellation(): SyntheticSatelliteDefinition[] {
 
 function computeOrbitPoint(
   definition: SyntheticSatelliteDefinition,
-  secondsSinceAnchor: number
+  secondsSinceAnchor: number,
+  result?: Cartesian3
 ): Cartesian3 {
   const orbitRadiusM = (EARTH_RADIUS_KM + definition.altitudeKm) * 1000;
   const orbitalAngle =
@@ -133,11 +138,11 @@ function computeOrbitPoint(
   const cosEarthRotation = Math.cos(earthRotation);
   const sinEarthRotation = Math.sin(earthRotation);
 
-  return new Cartesian3(
-    inertialX * cosEarthRotation - inertialY * sinEarthRotation,
-    inertialX * sinEarthRotation + inertialY * cosEarthRotation,
-    inclinedZ
-  );
+  const output = result ?? new Cartesian3();
+  output.x = inertialX * cosEarthRotation - inertialY * sinEarthRotation;
+  output.y = inertialX * sinEarthRotation + inertialY * cosEarthRotation;
+  output.z = inclinedZ;
+  return output;
 }
 
 function buildOrbitPolylinePositions(
@@ -155,7 +160,8 @@ function buildOrbitPolylinePositions(
 
 function createSatelliteEntity(
   dataSource: CustomDataSource,
-  definition: SyntheticSatelliteDefinition
+  definition: SyntheticSatelliteDefinition,
+  positionProperty: ConstantPositionProperty
 ): Entity {
   return dataSource.entities.add({
     id: definition.id,
@@ -180,43 +186,28 @@ function createSatelliteEntity(
       uri: SATELLITE_MODEL_URI
     },
     path: undefined,
-    polyline: undefined
+    polyline: undefined,
+    position: positionProperty
   });
 }
 
-function createOrbitGuideEntities(
+function createOrbitLineEntity(
   dataSource: CustomDataSource,
   definition: SyntheticSatelliteDefinition
-): void {
+): Entity {
   const orbitPositions = buildOrbitPolylinePositions(definition);
   const orbitColor = Color.fromCssColorString(definition.colorCss);
 
-  // Use sampled guide dots instead of Cesium polyline geometry so the demo
-  // stays stable in headless smoke runs while still communicating each shell.
-  for (
-    let sampleIndex = 0;
-    sampleIndex < orbitPositions.length;
-    sampleIndex += ORBIT_GUIDE_STEP
-  ) {
-    const position = orbitPositions[sampleIndex];
-
-    if (!position) {
-      continue;
-    }
-
-    dataSource.entities.add({
-      id: `${definition.id}-orbit-guide-${sampleIndex}`,
-      point: {
-        color: orbitColor.withAlpha(sampleIndex === 0 ? 0.86 : 0.34),
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
-        distanceDisplayCondition: new DistanceDisplayCondition(0, 60_000_000),
-        outlineColor: Color.fromCssColorString("#07131d").withAlpha(0.55),
-        outlineWidth: 1,
-        pixelSize: sampleIndex === 0 ? 5 : 3
-      },
-      position
-    });
-  }
+  return dataSource.entities.add({
+    id: `${definition.id}-orbit-line`,
+    polyline: {
+      distanceDisplayCondition: new DistanceDisplayCondition(0, 80_000_000),
+      material: orbitColor.withAlpha(0.34),
+      positions: orbitPositions,
+      width: 2.4
+    },
+    show: false
+  });
 }
 
 function toJulianDateSeconds(
@@ -226,20 +217,84 @@ function toJulianDateSeconds(
   return JulianDate.secondsDifference(time, anchor);
 }
 
+function createGlobePreviewOrbitIds(
+  definitions: readonly SyntheticSatelliteDefinition[]
+): string[] {
+  const previewIds: string[] = [];
+  const selectedIds = new Set<string>();
+  const seenInclinations = new Set<string>();
+
+  for (const definition of definitions) {
+    const inclinationKey = definition.inclinationRad.toFixed(4);
+    if (seenInclinations.has(inclinationKey)) {
+      continue;
+    }
+
+    seenInclinations.add(inclinationKey);
+    selectedIds.add(definition.id);
+    previewIds.push(definition.id);
+  }
+
+  for (const definition of definitions) {
+    if (previewIds.length >= 3) {
+      break;
+    }
+
+    if (selectedIds.has(definition.id)) {
+      continue;
+    }
+
+    selectedIds.add(definition.id);
+    previewIds.push(definition.id);
+  }
+
+  return previewIds.slice(0, 3);
+}
+
+function orbitIdsMatch(
+  left: ReadonlySet<string>,
+  right: ReadonlySet<string>
+): boolean {
+  if (left.size !== right.size) {
+    return false;
+  }
+
+  for (const value of left) {
+    if (!right.has(value)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 export function createSyntheticConstellationRuntime(
   viewer: Viewer
 ): SyntheticConstellationRuntime {
   const definitions = buildSyntheticConstellation();
+  const globePreviewOrbitIds = createGlobePreviewOrbitIds(definitions);
+  const sampleBuffer: ConstellationSatelliteSample[] = definitions.map((definition) => ({
+    altitudeKm: definition.altitudeKm,
+    id: definition.id,
+    label: definition.label,
+    positionM: computeOrbitPoint(definition, 0)
+  }));
   const dataSource = new CustomDataSource("synthetic-constellation-demo");
   const satelliteEntities: SatelliteEntityRecord[] = [];
   const clockAnchor = JulianDate.clone(viewer.clock.currentTime);
+  let cachedSampleTime: JulianDate | undefined;
   let disposed = false;
+  let entitySyncEnabled = true;
+  let highlightedOrbitIds = new Set<string>();
 
   for (const definition of definitions) {
-    createOrbitGuideEntities(dataSource, definition);
+    const positionProperty = new ConstantPositionProperty(
+      sampleBuffer[satelliteEntities.length]?.positionM ?? new Cartesian3()
+    );
     satelliteEntities.push({
       definition,
-      entity: createSatelliteEntity(dataSource, definition)
+      entity: createSatelliteEntity(dataSource, definition, positionProperty),
+      positionProperty
     });
   }
 
@@ -253,21 +308,33 @@ export function createSyntheticConstellationRuntime(
   });
 
   function sampleAtTime(time: JulianDate): ReadonlyArray<ConstellationSatelliteSample> {
+    if (cachedSampleTime && JulianDate.equals(cachedSampleTime, time)) {
+      return sampleBuffer;
+    }
+
     const secondsSinceAnchor = toJulianDateSeconds(time, clockAnchor);
 
-    return definitions.map((definition) => {
-      const position = computeOrbitPoint(definition, secondsSinceAnchor);
-      return {
-        altitudeKm: definition.altitudeKm,
-        id: definition.id,
-        label: definition.label,
-        positionM: position
-      };
-    });
+    for (let index = 0; index < definitions.length; index += 1) {
+      const definition = definitions[index];
+      const sample = sampleBuffer[index];
+
+      if (!definition || !sample) {
+        continue;
+      }
+
+      computeOrbitPoint(definition, secondsSinceAnchor, sample.positionM);
+    }
+
+    cachedSampleTime = JulianDate.clone(time, cachedSampleTime);
+    return sampleBuffer;
   }
 
-  function syncEntities(time: JulianDate): void {
-    if (disposed || viewer.isDestroyed()) {
+  function syncEntities(time: JulianDate, options?: { force?: boolean }): void {
+    if (
+      disposed ||
+      viewer.isDestroyed() ||
+      (!options?.force && !entitySyncEnabled)
+    ) {
       return;
     }
 
@@ -281,11 +348,32 @@ export function createSyntheticConstellationRuntime(
         continue;
       }
 
-      entity.position = new ConstantPositionProperty(sample.positionM);
+      satelliteEntities[index]?.positionProperty.setValue(sample.positionM);
+    }
+  }
+
+  function syncOrbitLineVisibility(): void {
+    for (const record of satelliteEntities) {
+      const shouldShow = highlightedOrbitIds.has(record.definition.id);
+
+      if (shouldShow && !record.orbitLineEntity) {
+        record.orbitLineEntity = createOrbitLineEntity(dataSource, record.definition);
+      }
+
+      if (record.orbitLineEntity) {
+        record.orbitLineEntity.show = shouldShow;
+      }
+    }
+  }
+
+  function syncSatelliteVisibility(visible: boolean): void {
+    for (const record of satelliteEntities) {
+      record.entity.show = visible;
     }
   }
 
   syncEntities(viewer.clock.currentTime);
+  syncSatelliteVisibility(true);
   const removeTickListener = viewer.clock.onTick.addEventListener((clock) => {
     syncEntities(clock.currentTime);
   });
@@ -295,8 +383,33 @@ export function createSyntheticConstellationRuntime(
       return definitions.length;
     },
 
+    getGlobePreviewOrbitIds(): readonly string[] {
+      return globePreviewOrbitIds;
+    },
+
     sampleAtTime(time: JulianDate): ReadonlyArray<ConstellationSatelliteSample> {
       return sampleAtTime(time);
+    },
+
+    setHighlightedOrbitIds(ids: readonly string[]): void {
+      const nextIds = new Set(ids);
+      if (orbitIdsMatch(highlightedOrbitIds, nextIds)) {
+        return;
+      }
+
+      highlightedOrbitIds = nextIds;
+      syncOrbitLineVisibility();
+      viewer.scene.requestRender();
+    },
+
+    setVisible(visible: boolean): void {
+      entitySyncEnabled = visible;
+      if (visible) {
+        syncEntities(viewer.clock.currentTime, { force: true });
+      }
+      syncSatelliteVisibility(visible);
+      syncOrbitLineVisibility();
+      viewer.scene.requestRender();
     },
 
     async dispose(): Promise<void> {
