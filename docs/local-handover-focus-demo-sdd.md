@@ -142,8 +142,7 @@ The HUD DOM surface exists but is **hidden by default**. It is an **optional exp
 ### 5.5 Visual representation
 
 - site marker point + label (default `Selected Site`, or preset display name)
-- site halo ring
-- footprint ellipse for contextual reference
+- phase-gated pending halo cue during `prepared` / `switching`
 
 These are **presentation cues** marking where the UE anchor sits. They encode nothing about coverage, service area, or RF truth.
 

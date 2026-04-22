@@ -84,9 +84,14 @@ Purpose:
 - compress candidate geometry into a readable elevated local sky corridor above the site
 - drive three proxy satellites with a resident serving beam and a phase-gated pending preview cue
 
-Primary file:
+Primary files:
 
 - `src/features/demo/handover-focus-demo.ts`
+- `src/features/demo/local-handover-model.ts`
+- `src/features/demo/local-handover-renderer.ts`
+- `src/features/demo/local-handover-camera.ts`
+- `src/features/demo/local-handover-selection.ts`
+- `src/features/demo/tile-feature-infobox.ts`
 
 Key rule:
 
@@ -95,12 +100,12 @@ It is a compressed presentation layer derived from the current synthetic candida
 
 Current implementation note:
 
-- `src/features/demo/handover-focus-demo.ts` still owns the local-focus controller as one file, but the internal runtime seam is now explicit:
-  - local handover truth-frame building
-  - local handover presentation-frame derivation
-  - local handover shell-frame derivation
-  - Cesium render application
-  - shell / text synchronization
+- `src/features/demo/handover-focus-demo.ts` now acts as the controller/wiring layer
+- `src/features/demo/local-handover-model.ts` owns candidate truth and presentation derivation
+- `src/features/demo/local-handover-renderer.ts` owns stage entity creation and Cesium render mutation
+- `src/features/demo/local-handover-camera.ts` owns local-focus framing and glide/fly behavior
+- `src/features/demo/local-handover-selection.ts` owns stage-overlay passthrough selection
+- `src/features/demo/tile-feature-infobox.ts` owns safe 3D Tiles InfoBox serialization
 - a second Viewer instance or separate local-view runtime is not part of the current architecture direction
 
 ### 2.5 Toolbar-Level Demo Controls
@@ -179,11 +184,11 @@ The runtime flow is now:
 
 Current seam inside the same runtime:
 
-1. build local handover truth
-2. derive local presentation state from that truth
-3. derive shell / explainer state from that truth
-4. render the resulting presentation state into Cesium entities
-5. sync shell / text state separately from Cesium mutation
+1. `local-handover-model.ts` builds local handover truth and presentation state
+2. `local-handover-renderer.ts` renders that presentation state into Cesium entities
+3. `local-handover-renderer.ts` syncs shell / text state separately from Cesium mutation
+4. `local-handover-camera.ts` computes and executes local-focus camera moves
+5. `local-handover-selection.ts` handles stage-overlay passthrough selection
 
 ## 5. Deliberate Demo Seams
 
@@ -215,7 +220,8 @@ When describing the repo's current intent, use this order:
 1. `README.md`
 2. `docs/local-handover-focus-demo-sdd.md`
 3. `docs/local-focus-visual-refinement-sdd.md`
-4. this file
+4. `docs/local-focus-safe-refactor-sdd.md` for structural cleanup / refactor guardrails
+5. this file
 
 When investigating Cesium runtime behavior, use:
 

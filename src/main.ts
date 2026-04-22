@@ -4,6 +4,7 @@ import { mountAppShell } from "./features/app/app-shell";
 import {
   createHandoverFocusDemoController
 } from "./features/demo/handover-focus-demo";
+import { maybeRunLocalFocusSmokeScenario } from "./features/demo/local-focus-smoke-scenario";
 import {
   createSyntheticConstellationRuntime
 } from "./features/demo/synthetic-constellation";
@@ -79,8 +80,9 @@ const handoverDemo = createHandoverFocusDemoController({
   viewer
 });
 const removeHomeResetListener = viewer.homeButton?.viewModel.command.beforeExecute.addEventListener(() => {
+  // Home should only clear the local-focus stage. Scene-level toggles such as
+  // sky mode remain user-owned preferences and should survive the reset.
   handoverDemo.clearUeAnchor({ cancelFlight: false });
-  skyMode.setMode("blue");
 });
 const unmountNtpuShortcut = mountNtpuShortcut(viewer, handoverDemo);
 const removeMorphCompleteListener = viewer.scene.morphComplete.addEventListener(() => {
@@ -99,6 +101,11 @@ setBootstrapState("ready");
 // OSM Buildings remain a best-effort visual layer that can load, degrade, or
 // fail independently without flipping the app out of the ready state.
 const unmountOsmBuildingsShowcase = mountOptionalOsmBuildingsShowcase(viewer);
+maybeRunLocalFocusSmokeScenario({
+  handoverDemo,
+  skyMode,
+  viewer
+});
 
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {

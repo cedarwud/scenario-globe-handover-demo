@@ -6,8 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "test": "npm run build && node scripts/verify-phase0.mjs",
-    "test:phase1": "npm run build && node tests/smoke/bootstrap-loads-assets-and-workers.mjs",
+    "test": "npm run build && node scripts/verify-phase0.mjs && npm run test:contract",
+    "test:contract": "npx tsx tests/contract/verify-tile-feature-infobox-sanitization.ts && npx tsx tests/contract/verify-handover-selection-passthrough.ts",
+    "test:phase1": "npm run build && npm run test:contract && node tests/smoke/bootstrap-loads-assets-and-workers.mjs && node tests/smoke/local-focus-interactions.mjs",
+    "test:local-focus": "npm run build && node tests/smoke/local-focus-interactions.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

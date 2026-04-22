@@ -8,11 +8,12 @@ const NTPU_ICON = `
 </svg>
 `;
 
-const NTPU_SITE = {
+export const NTPU_SITE = {
   altitudeM: 50,
   latitudeDeg: 24.94004,
   longitudeDeg: 121.37136
 } as const;
+export const NTPU_DISPLAY_NAME = "National Taipei University, Taiwan";
 
 function getToolbar(viewer: Viewer): HTMLElement | null {
   return viewer.container.querySelector<HTMLElement>(".cesium-viewer-toolbar");
@@ -52,7 +53,7 @@ export function mountNtpuShortcut(
         NTPU_SITE.altitudeM
       ),
       {
-        displayName: "National Taipei University, Taiwan",
+        displayName: NTPU_DISPLAY_NAME,
         transition: "fly"
       }
     );

@@ -66,8 +66,10 @@ If you need to disable OSM Buildings temporarily, open the app with:
 |---|---|
 | `npm run dev` | Start the local Vite development server |
 | `npm run build` | Type-check and build the demo |
-| `npm test` | Run the build-verification bundle |
-| `npm run test:phase1` | Run the browser bootstrap smoke after building |
+| `npm test` | Run build verification plus contract checks |
+| `npm run test:contract` | Run focused contract checks for InfoBox sanitization and selection passthrough |
+| `npm run test:phase1` | Run build verification, contract checks, browser bootstrap smoke, and local-focus interaction regression |
+| `npm run test:local-focus` | Run the local-focus interaction regression after building |
 | `npm run preview` | Preview the built artifact locally |
 
 `npm test` and `npm run test:phase1` keep their older script names for compatibility, but
@@ -87,7 +89,11 @@ The current runtime is split into six narrow surfaces:
   - global satellites
   - orbit guide dots
 - `local handover focus`
-  - site picking
+  - controller wiring
+  - truth / presentation derivation
+  - Cesium render application
+  - camera moves
+  - selection passthrough
   - compressed elevated local sky corridor
   - serving beam + pending preview cue
 - `toolbar shortcuts`
@@ -100,12 +106,22 @@ The current runtime is split into six narrow surfaces:
 The left and right demo HUD panels still exist in the DOM for future refinement, but they are
 currently hidden by default.
 
+Current local-focus module split:
+
+- `src/features/demo/handover-focus-demo.ts`
+- `src/features/demo/local-handover-model.ts`
+- `src/features/demo/local-handover-renderer.ts`
+- `src/features/demo/local-handover-camera.ts`
+- `src/features/demo/local-handover-selection.ts`
+- `src/features/demo/tile-feature-infobox.ts`
+
 ## Authority Docs
 
 Read these first when updating the demo:
 
 - `docs/local-handover-focus-demo-sdd.md`
 - `docs/local-focus-visual-refinement-sdd.md`
+- `docs/local-focus-safe-refactor-sdd.md` for structural cleanup / safe refactor work
 - `docs/architecture.md`
 
 Use these as Cesium provenance and bootstrap references, not as the active product story:
